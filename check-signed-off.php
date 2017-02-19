@@ -15,10 +15,6 @@
 global $debugMsgs, $debugMode;
 $debugMode = true;
 
-$message = trim(shell_exec('git show -s --format=%B HEAD'));
-$lines = explode("\n", trim(str_replace("\r", "\n", $message)));
-$lastLine = $lines[count($lines) - 1];
-
 // First, lets do a basic test.  This is non GPG signed commits.
 $signedoff = find_signed_off();
 
@@ -27,7 +23,7 @@ if (empty($signedoff))
 	$signedoff = find_gpg();
 
 // Nothing yet?  Lets ask your parents.
-if (empty($signedoff))
+if (empty($signedoff) && isset($_SERVER['argv'], $_SERVER['argv'][1]) && $_SERVER['argv'][1] == 'travis')
 	$signedoff = find_signed_off_parents();
 
 // Nothing?  Well darn.
@@ -151,12 +147,16 @@ function find_gpg($commit = 'HEAD', $childs = array())
 // Looks at all the parents, and tries to find a signed off by somewhere.
 function find_signed_off_parents($commit = 'HEAD')
 {
+	debugPrint('Attempting to find parents on commit [' . $commit . ']');
+
 	$parentsRaw = shell_exec('git show -s --format=%P ' . $commit);
 	$parents = explode(' ', $parentsRaw);
 
 	// Test each one.
 	foreach ($parents as $p)
 	{
+		debugPrint('Testing Parent for signed off [' . $commit . ']');
+
 		// Basic tests.
 		$test = find_signed_off($p);
 
