@@ -26,6 +26,10 @@ $signedoff = find_signed_off();
 if (empty($signedoff))
 	$signedoff = find_gpg();
 
+// Nothing yet?  Lets ask your parents.
+if (empty($signedoff))
+	$signedoff = find_signed_off_parents();
+
 // Nothing?  Well darn.
 if (empty($signedoff))
 {
@@ -142,6 +146,30 @@ function find_gpg($commit = 'HEAD', $childs = array())
 	);
 
 	return $result;
+}
+
+// Looks at all the parents, and tries to find a signed off by somewhere.
+function find_signed_off_parents($commit = 'HEAD')
+{
+	$parentsRaw = shell_exec('git show -s --format=%P ' . $commit);
+	$parents = explode(' ', $parentsRaw);
+
+	// Test each one.
+	foreach ($parents as $p)
+	{
+		// Basic tests.
+		$test = find_signed_off($p);
+
+		// No, maybe it has a GPG parent.
+		if (empty($test))
+			$test = find_gpg($p);
+
+		if (!empty($test))
+			return $test;
+	}
+
+	// Lucked out.
+	return false;
 }
 
 // Print a debug line
