@@ -86,9 +86,9 @@ $match = array(
 	0 => '\* Simple Machines Forum \(SMF\)' . '[\r]?\n',
 	1 => ' \*' . '[\r]?\n',
 	2 => ' \* @package SMF' . '[\r]?\n',
-	3 => ' \* @author Simple Machines http://www.simplemachines.org' . '[\r]?\n',
+	3 => ' \* @author Simple Machines https?://www.simplemachines.org' . '[\r]?\n',
 	4 => ' \* @copyright \d{4} Simple Machines and individual contributors' . '[\r]?\n',
-	5 => ' \* @license http://www.simplemachines.org/about/smf/license.php BSD' . '[\r]?\n',
+	5 => ' \* @license https?://www.simplemachines.org/about/smf/license.php BSD' . '[\r]?\n',
 	6 => ' \*' . '[\r]?\n',
 	7 => ' \* @version',
 );
@@ -115,7 +115,7 @@ if (in_array($currentFile, array('./other/upgrade.php', './other/install.php')))
 	// The code is fairly well into it, just get the entire contents.
 	$upgradeFile = file_get_contents($currentFile);
 
-	if (!preg_match('~<li class="copyright"><a href="http://www.simplemachines.org/" title="Simple Machines Forum" target="_blank" class="new_win">SMF &copy; (\d{4}), Simple Machines</a></li>~i', $upgradeFile, $upgradeResults))
+	if (!preg_match('~<li class="copyright"><a href="https?://www.simplemachines.org/" title="Simple Machines Forum" target="_blank" class="new_win">SMF &copy; (\d{4}), Simple Machines</a></li>~i', $upgradeFile, $upgradeResults))
 		die('Error: Could not locate upgrade template copyright $software_year' . "\n");
 
 	if ((int) $upgradeResults[1] != $currentSoftwareYear)
