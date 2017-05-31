@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Run all the scripts.
+# Run all the scripts. 
 git submodule foreach git pull origin master
 
 if find . -name "*.php" ! -path "./vendor/*" -exec php -l {} 2>&1 \; | grep "syntax error, unexpected"; then exit 1; fi
