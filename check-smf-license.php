@@ -50,6 +50,10 @@ $ignoreFiles = array(
 	'\./other/db_last_error.php',
 );
 
+$ignoreFilesVersion = array(
+	'\./other/buildTools/check-[A-Za-z0-9-_]\.php',
+);
+
 // No file? Thats bad.
 if (!isset($_SERVER['argv'], $_SERVER['argv'][1]))
 	die('Error: No File specified' . "\n");
@@ -107,7 +111,15 @@ if (!preg_match('~' . implode('', $yearMatch) . '~i', $contents))
 $versionMatch = $match;
 $versionMatch[7] = ' \* @version ' . $currentVersion . '[\r]?\n';
 if (!preg_match('~' . implode('', $versionMatch) . '~i', $contents))
-	die('Error: The version is incorrect in ' . $currentFile . "\n");
+{
+	$badVersion = true;
+	foreach ($ignoreFilesVersion as $if)
+		if (preg_match('~' . $if . '~i', $currentFile))
+			$badVersion = false;
+
+	if ($badVersion)
+		die('Error: The version is incorrect in ' . $currentFile . "\n");
+}
 
 // Special check, ugprade.php, install.php copyright templates.
 if (in_array($currentFile, array('./other/upgrade.php', './other/install.php')))
