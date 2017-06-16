@@ -46,12 +46,12 @@ $ignoreFiles = array(
 	'./Themes/default/languages/[A-Za-z0-9]+\.english\.php',
 
 	// Cache and miscellaneous.
-	'\./cache/data_[A-Za-z0-9-_]\.php',
+	'\./cache/data_[A-Za-z0-9-_]+\.php',
 	'\./other/db_last_error.php',
 );
 
 $ignoreFilesVersion = array(
-	'\./other/buildTools/check-[A-Za-z0-9-_]\.php',
+	'/buildTools/check-[A-Za-z0-9-_]+\.php',
 );
 
 // No file? Thats bad.
