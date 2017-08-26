@@ -47,6 +47,8 @@ function find_signed_off($commit = 'HEAD', $childs = array(), $level = 0)
 {
 	global $debugMsgs;
 
+	$commit = trim($commit);
+
 	// Where we are at.
 	debugPrint('Attempting to Find signed off on commit [' . $commit . ']');
 
@@ -123,6 +125,8 @@ function find_gpg($commit = 'HEAD', $childs = array())
 {
 	global $debugMsgs;
 
+	$commit = trim($commit);
+
 	debugPrint('Attempting to Find GPG on commit [' . $commit . ']');
 
 	// Get verify commit data.
@@ -147,6 +151,8 @@ function find_gpg($commit = 'HEAD', $childs = array())
 // Looks at all the parents, and tries to find a signed off by somewhere.
 function find_signed_off_parents($commit = 'HEAD')
 {
+	$commit = trim($commit);
+
 	debugPrint('Attempting to find parents on commit [' . $commit . ']');
 
 	$parentsRaw = shell_exec('git show -s --format=%P ' . $commit);
@@ -155,6 +161,7 @@ function find_signed_off_parents($commit = 'HEAD')
 	// Test each one.
 	foreach ($parents as $p)
 	{
+		$p = trim($p);
 		debugPrint('Testing Parent for signed off [' . $commit . ']');
 
 		// Basic tests.
