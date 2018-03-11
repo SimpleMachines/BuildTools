@@ -32,6 +32,10 @@ $ignoreFiles = array(
 	'\./Sources/ReCaptcha/[A-Za-z0-9]+\.php',
 	'\./Sources/ReCaptcha/RequestMethod/[A-Za-z0-9]+\.php',
 
+	// Punycode Stuff.
+	'\./Sources/punycode/[A-Za-z0-9]+\.php',
+	'\./Sources/punycode/Exception/[A-Za-z0-9]+\.php',
+
 	// We will ignore Settings.php if this is a live dev site.
 	'\./Settings.php',
 	'\./Settings_bak.php',
