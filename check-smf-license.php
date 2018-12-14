@@ -37,6 +37,9 @@ $ignoreFiles = array(
 
 	// Minify Stuff.
 	'\./Sources/minify/[A-Za-z0-9/-]+\.php',
+	
+	// random_compat().
+	'\./Sources/random_compat/[A-Za-z0-9/-]+\.php',
 
 	// ReCaptcha Stuff.
 	'\./Sources/ReCaptcha/[A-Za-z0-9]+\.php',
