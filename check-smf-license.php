@@ -134,9 +134,9 @@ if (in_array($currentFile, array('./other/upgrade.php', './other/install.php')))
 	// The code is fairly well into it, just get the entire contents.
 	$upgradeFile = file_get_contents($currentFile);
 
-	if (!preg_match('~<li class="copyright"><a href="https?://www.simplemachines.org/" title="Simple Machines Forum" target="_blank" rel="noopener"( class="new_win")?>SMF &copy; (\d{4}), Simple Machines</a></li>~i', $upgradeFile, $upgradeResults))
-		die('Error: Could not locate ' . $currentFile. ' template copyright $software_year' . "\n");
+	if (!preg_match('~define\(\'SMF_SOFTWARE_YEAR\', \'(\d{4})\'\);~', $upgradeFile, $upgradeResults))
+		die('Error: Could not locate ' . $currentFile. ' SMF_SOFTWARE_YEAR' . "\n");
 
-	if ((int) $upgradeResults[2] != $currentSoftwareYear)
-		die('Error: ' . $currentFile. ' template copyright year is invalid' . "\n");
+	if ((int) $upgradeResults[1] != $currentSoftwareYear)
+		die('Error: ' . $currentFile. ' SMF_SOFTWARE_YEAR is ' . $upgradeResults[1] . ', but should be ' . $currentSoftwareYear . ".\n");
 }
