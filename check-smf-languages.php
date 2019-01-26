@@ -30,7 +30,7 @@ foreach ($ignoreFiles as $if)
 	if (preg_match('~' . $if . '~i', $currentFile))
 		die;
 
-// Lets get the main index.php for $forum_version and $software_year.
+// Lets get the version.
 $upgradeFile = fopen('./other/upgrade.php', 'r');
 $upgradeContents = fread($upgradeFile, 500);
 

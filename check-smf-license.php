@@ -75,16 +75,16 @@ foreach ($ignoreFiles as $if)
 	if (preg_match('~' . $if . '~i', $currentFile))
 		die;
 
-// Lets get the main index.php for $forum_version and $software_year.
+// Lets get the version and year.
 $indexFile = fopen('./index.php', 'r');
 $indexContents = fread($indexFile, 850);
 
-if (!preg_match('~\$forum_version = \'SMF ([^\']+)\';~i', $indexContents, $versionResults))
-	die('Error: Could not locate $forum_version' . "\n");
+if (!preg_match('~define\(\'SMF_VERSION\', \'([^\']+)\'\);~i', $indexContents, $versionResults))
+	die('Error: Could not locate SMF_VERSION' . "\n");
 $currentVersion = $versionResults[1];
 
-if (!preg_match('~\$software_year = \'(\d{4})\';~i', $indexContents, $yearResults))
-	die('Error: Could not locate $software_year' . "\n");
+if (!preg_match('~define\(\'SMF_SOFTWARE_YEAR\', \'(\d{4})\'\);~i', $indexContents, $yearResults))
+	die('Error: Could not locate SMF_SOFTWARE_YEAR' . "\n");
 $currentSoftwareYear = (int) $yearResults[1];
 
 $file = fopen($currentFile, 'r');
