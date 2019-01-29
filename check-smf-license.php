@@ -77,7 +77,7 @@ foreach ($ignoreFiles as $if)
 
 // Lets get the version and year.
 $indexFile = fopen('./index.php', 'r');
-$indexContents = fread($indexFile, 850);
+$indexContents = fread($indexFile, 1250);
 
 if (!preg_match('~define\(\'SMF_VERSION\', \'([^\']+)\'\);~i', $indexContents, $versionResults))
 	die('Error: Could not locate SMF_VERSION' . "\n");

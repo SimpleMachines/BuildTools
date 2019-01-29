@@ -32,7 +32,7 @@ foreach ($ignoreFiles as $if)
 
 // Lets get the version.
 $upgradeFile = fopen('./other/upgrade.php', 'r');
-$upgradeContents = fread($upgradeFile, 500);
+$upgradeContents = fread($upgradeFile, 1250);
 
 if (!preg_match('~define\(\'SMF_LANG_VERSION\', \'([^\']+)\'\);~i', $upgradeContents, $versionResults))
 	die('Error: Could not locate SMF_LANG_VERSION' . "\n");
