@@ -13,7 +13,7 @@
 
 $versions = array();
 $years = array();
-foreach (array('./index.php', './SSI.php', './other/install.php', './other/upgrade.php') as $path)
+foreach (array('./index.php', './SSI.php', './cron.php', './other/install.php', './other/upgrade.php') as $path)
 {
 	$contents = file_get_contents($path, false, null, 0, 1250);
 
