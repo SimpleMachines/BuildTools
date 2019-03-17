@@ -34,3 +34,7 @@ if (count($versions) != 1)
 
 if (count($years) != 1)
 	die('Error: SMF_SOFTWARE_YEAR differs between ' . implode(', ', array_keys($versions)));
+
+$version = reset($versions);
+if (!preg_match('~^((\d+)\.(\d+)[. ]?((?:(?<= )(?>RC|Beta |Alpha ))?\d+)?)$~', $version))
+	die('Error: SMF_VERSION string is invalid: "' . $version . '"');
