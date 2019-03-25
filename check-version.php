@@ -19,22 +19,28 @@ foreach (array('./index.php', './SSI.php', './cron.php', './proxy.php', './other
 
 	if (!preg_match('/define\(\'SMF_VERSION\', \'([^\']+)\'\);/i', $contents, $versionResults))
 		die('Error: Could not locate SMF_VERSION in ' . $path . "\n");
-	$versions[$path] = $versionResults[1];
+	$versions[$versionResults[1]][] = $path;
 
 	if (!preg_match('/define\(\'SMF_SOFTWARE_YEAR\', \'(\d{4})\'\);/i', $contents, $yearResults))
 		die('Error: Could not locate SMF_SOFTWARE_YEAR in ' . $path . "\n");
-	$years[$path] = (int) $yearResults[1];
+	$years[$yearResults[1]][] = $path;
 }
 
-$versions = array_unique($versions);
-$years = array_unique($years);
-
 if (count($versions) != 1)
-	die('Error: SMF_VERSION differs between ' . implode(', ', array_keys($versions)));
+{
+	$errmsg = 'Error: SMF_VERSION differs between files.';
+	foreach ($versions as $version => $paths)
+		$errmsg .= ' "' . $version . '" in ' . implode(', ', $paths) . '.';
+	die($errmsg);
+}
 
 if (count($years) != 1)
-	die('Error: SMF_SOFTWARE_YEAR differs between ' . implode(', ', array_keys($versions)));
+{
+	$errmsg = 'Error: SMF_SOFTWARE_YEAR differs between files.';
+	foreach ($years as $year => $paths)
+		$errmsg .= ' "' . $year . '" in ' . implode(', ', $paths) . '.';
+	die($errmsg);
+}
 
-$version = reset($versions);
-if (!preg_match('~^((\d+)\.(\d+)[. ]?((?:(?<= )(?>RC|Beta |Alpha ))?\d+)?)$~', $version))
-	die('Error: SMF_VERSION string is invalid: "' . $version . '"');
+if (!preg_match('~^((\d+)\.(\d+)[. ]?((?:(?<= )(?>RC|Beta |Alpha ))?\d+)?)$~', key($versions)))
+	die('Error: SMF_VERSION string is invalid: "' . key($versions) . '"');
