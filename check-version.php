@@ -44,3 +44,6 @@ if (count($years) != 1)
 
 if (!preg_match('~^((\d+)\.(\d+)[. ]?((?:(?<= )(?>RC|Beta |Alpha ))?\d+)?)$~', key($versions)))
 	die('Error: SMF_VERSION string is invalid: "' . key($versions) . '"');
+
+if (($headyear = (int) substr(shell_exec('git show -s --format=%ci HEAD'), 0, 4)) > (int) key($years))
+	die('Error: SMF_SOFTWARE_YEAR is ' . (int) key($years) . ', should be ' . $headyear . '.');
