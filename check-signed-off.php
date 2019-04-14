@@ -12,8 +12,10 @@
  */
 
 // Debug stuff.
-global $debugMsgs, $debugMode;
-$debugMode = true;
+define(DEBUG_MODE, false);
+
+if (DEBUG_MODE)
+	debugPrint("--- DEBUG MSGS START ---");
 
 // First, lets do a basic test.  This is non GPG signed commits.
 $signedoff = find_signed_off();
@@ -26,36 +28,26 @@ if (empty($signedoff))
 if (empty($signedoff) && isset($_SERVER['argv'], $_SERVER['argv'][1]) && $_SERVER['argv'][1] == 'travis')
 	$signedoff = find_signed_off_parents();
 
+if (DEBUG_MODE)
+	debugPrint("--- DEBUG MSGS END ---");
+
 // Nothing?  Well darn.
 if (empty($signedoff))
-{
-	// Debugging, eh?
-	if ($debugMode)
-	{
-		echo "\n---DEBUG MSGS START ---\n";
-		var_dump($debugMsgs);
-		echo "\n---DEBUG MSGS END ---\n";
-	}
-
 	die('Error: Signed-off-by not found in commit message' . "\n");
-}
-elseif ($debugMode)
-	debugPrint('Valid signed off found' . "\n");
+elseif (DEBUG_MODE)
+	debugPrint('Valid signed off found');
 
 // Find a commit by Signed Off
 function find_signed_off($commit = 'HEAD', $childs = array(), $level = 0)
 {
-	global $debugMsgs;
-
 	$commit = trim($commit);
 
 	// Where we are at.
-	debugPrint('Attempting to Find signed off on commit [' . $commit . ']');
+	debugPrint('Attempting to find signed off on commit ' . $commit);
 
 	// To many recrusions here.
 	if ($level > 10)
 	{
-		$debugMsgs[$commit . ':' . time()] = array('error' => 'Recurision limit');
 		debugPrint('Recusion limit exceeded on find_signed_off');
 		return false;
 	}
@@ -69,45 +61,38 @@ function find_signed_off($commit = 'HEAD', $childs = array(), $level = 0)
 	$lastLine = $lines[count($lines) - 1];
 
 	// Debug info.
-	debugPrint('Testing Line [' . $lastLine . ']');
+	debugPrint('Testing line "' . $lastLine . '"');
 
 	// loop through each test and find one.
 	$result = false;
 	foreach ($stringTests as $testedString)
 	{
-		debugPrint('Testing [' . $testedString . ']');
+		debugPrint('Testing "' . $testedString . '"');
 
 		$result = stripos($lastLine, $testedString);
 
 		// We got a result.
 		if ($result !== false)
 		{
-			debugPrint('Found Result [' . $testedString . ']');
+			debugPrint('Found "' . $testedString . '"');
 			break;
 		}
 	}
 
 	// Debugger.
-	$debugMsgs[$commit . ':' . time()] = array(
-		// Raw body.
-		'B' => shell_exec('git show -s --format=%B ' . $commit),
-		// Body.
-		'b2' => shell_exec('git show -s --format=%b ' . $commit),
-		// Commit notes.
-		'N' => shell_exec('git show -s --format=%N ' . $commit),
-		// Ref names.
-		'd' => shell_exec('git show -s --format=%d ' . $commit),
-		// Commit hash.
-		'H' => shell_exec('git show -s --format=%H ' . $commit),
-		// Tree hash.
-		'T' => shell_exec('git show -s --format=%T ' . $commit),
-		// Parent hash.
-		'P' => shell_exec('git show -s --format=%P ' . $commit),
-		// Result.
-		'result' => $result,
-		// Last tested string, or the correct string.
-		'testedString' => $testedString,
+	$debugMsgs = array(
+		'raw body' => '"' . rtrim(shell_exec('git show -s --format=%B ' . $commit)) . '"',
+		'body' => '"' . rtrim(shell_exec('git show -s --format=%b ' . $commit)) . '"',
+		'commit notes' => '"' . rtrim(shell_exec('git show -s --format=%N ' . $commit)) . '"',
+		'ref names' => '"' . rtrim(shell_exec('git show -s --format=%d ' . $commit)) . '"',
+		'commit hash' => '"' . rtrim(shell_exec('git show -s --format=%H ' . $commit)) . '"',
+		'tree hash' => '"' . rtrim(shell_exec('git show -s --format=%T ' . $commit)) . '"',
+		'parent hash' => '"' . rtrim(shell_exec('git show -s --format=%P ' . $commit)) . '"',
+		'result' => '"' . $result . '"',
+		'testedString' => '"' . $testedString . '"',
 	);
+	debugPrint('Commit ' . $commit . ' at time ' . time() . ": " . rtrim(print_r($debugMsgs, true)));
+
 
 	// No result and found a merge? Lets go deeper.
 	if ($result === false && preg_match('~Merge ([A-Za-z0-9]{40}) into ([A-Za-z0-9]{40})~i', $lastLine, $merges))
@@ -123,11 +108,9 @@ function find_signed_off($commit = 'HEAD', $childs = array(), $level = 0)
 // Find a commit by GPG
 function find_gpg($commit = 'HEAD', $childs = array())
 {
-	global $debugMsgs;
-
 	$commit = trim($commit);
 
-	debugPrint('Attempting to Find GPG on commit [' . $commit . ']');
+	debugPrint('Attempting to Find GPG on commit ' . $commit);
 
 	// Get verify commit data.
 	$message = trim(shell_exec('git verify-commit ' . $commit . ' -v --raw'));
@@ -136,14 +119,15 @@ function find_gpg($commit = 'HEAD', $childs = array())
 	$result = strlen($message) > 0;
 
 	// Debugger.
-	$debugMsgs[$commit . ':' . time()] = array(
+	$debugMsgs = array(
 		// Raw body.
-		'verify-commit' => shell_exec('git verify-commit ' . $commit . ' -v --raw'),
+		'verify-commit' => '"' . rtrim(shell_exec('git verify-commit ' . $commit . ' -v --raw')) . '"',
 		// Result.
-		'result' => $result,
+		'result' => '"' . $result . '"',
 		// Last tested string, or the correct string.
-		'message' => $message,
+		'message' => '"' . $message . '"',
 	);
+	debugPrint('Commit ' . $commit . ' at time ' . time() . ": " . rtrim(print_r($debugMsgs, true)));
 
 	return $result;
 }
@@ -153,16 +137,16 @@ function find_signed_off_parents($commit = 'HEAD')
 {
 	$commit = trim($commit);
 
-	debugPrint('Attempting to find parents on commit [' . $commit . ']');
+	debugPrint('Attempting to find parents on commit ' . $commit);
 
-	$parentsRaw = shell_exec('git show -s --format=%P ' . $commit);
+	$parentsRaw = rtrim(shell_exec('git show -s --format=%P ' . $commit));
 	$parents = explode(' ', $parentsRaw);
 
 	// Test each one.
 	foreach ($parents as $p)
 	{
 		$p = trim($p);
-		debugPrint('Testing Parent for signed off [' . $commit . ']');
+		debugPrint('Testing parent of ' . $commit . ' for signed off');
 
 		// Basic tests.
 		$test = find_signed_off($p);
@@ -182,8 +166,6 @@ function find_signed_off_parents($commit = 'HEAD')
 // Print a debug line
 function debugPrint($msg)
 {
-	global $debugMode;
-
-	if ($debugMode)
-		echo "\nDEBUG: ", $msg;
+	if (DEBUG_MODE)
+		echo $msg, "\n";
 }
