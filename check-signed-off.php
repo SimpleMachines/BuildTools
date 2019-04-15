@@ -12,7 +12,7 @@
  */
 
 // Debug stuff.
-define(DEBUG_MODE, false);
+define('DEBUG_MODE', false);
 
 if (DEBUG_MODE)
 	debugPrint("--- DEBUG MSGS START ---");
