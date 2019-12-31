@@ -31,7 +31,7 @@ $buildFiles = array(
 	'Themes/default/*.php' => 'DefaultTemplate',
 	'Themes/*/*.php' => 'Template',
 
-	// Languages
+	// Languages (keep this last in the list!)
 	'Themes/default/languages/*.english.php' => 'Languages',
 );
 
@@ -129,21 +129,34 @@ if (isset($cliparams['include-languages']) && $cliparams['output'] == 'raw')
 else
 {
 	foreach ($version_info as $location => $files)
+	{
+		if ($location === 'SMF')
+			echo "window.smfVersions = {\n";
+		elseif ($location === 'Languages')
+			echo "};\n\nwindow.smfLanguageVersions = {\n";
+
 		foreach ($files as $file => $version)
 		{
 			++$i;
-			$thislocation = $location === 'SMF' ? 'SMF' : ($location . $file);
+			$thislocation = $location === 'SMF' ? 'SMF' : ($location === 'Languages' ? str_replace('.english.php', '', $file) : $location . $file);
+
+			if ($thislocation === 'SMF')
+				$version = 'SMF ' . $version;
 
 			// 'SMF': 'SMF 2.1 RC1'
-			echo '\'', $thislocation, '\': \'' . $version . '\'';
-			
+			echo "\t'", $thislocation, "': '" . $version . "'";
+
 			// Add in the comma.
 			if ($count != $i)
 				echo ',';
 
 			// Add the return.
-			echo "\r\n";
+			echo "\n";
 		}
+
+		if ($location === 'Languages')
+			echo "};\n";
+	}
 }
 
 function prepareCLIhandler()
@@ -173,7 +186,7 @@ function prepareCLIhandler()
 			. '$ php ' . basename(__FILE__) . " path/to/smf/ [-h] [--output=raw] [--languages] [--smf=[20|21]] \n"
 			. "--include-languages	Include Languages Versions.". "\n"
 			. "--smf=[21|20]	What Version of SMF.  This defaults to SMF 21.". "\n"
-			. "-h, --help			This help file.". "\n"			
+			. "-h, --help			This help file.". "\n"
 			. "--output=raw	Raw output.". "\n"
 			. "\n";
 		die;
