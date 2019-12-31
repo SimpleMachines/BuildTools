@@ -40,7 +40,7 @@ $readLengths = array(
 	'SMF' => 4096,
 	'Sources' => 4096,
 	'Tasks' => 4096,
-	'DefaultTemplate' => 768,
+	'Default' => 768,
 	'Template' => 768,
 	'Languages' => 768
 );
@@ -50,7 +50,7 @@ $searchStrings = array(
 	'SMF' => '~\*\s@version\s+(.+)[\s]{2}~i',
 	'Sources' => '~\*\s@version\s+(.+)[\s]{2}~i',
 	'Tasks' => '~\*\s@version\s+(.+)[\s]{2}~i',
-	'DefaultTemplate' => '~\*\s@version\s+(.+)[\s]{2}~i',
+	'Default' => '~\*\s@version\s+(.+)[\s]{2}~i',
 	'Template' => '~\*\s@version\s+(.+)[\s]{2}~i',
 	'Languages' => '~(?://|/\*)\s*Version:\s+(.+?);\s*~i'
 );
