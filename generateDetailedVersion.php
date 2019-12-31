@@ -28,7 +28,7 @@ $buildFiles = array(
 	'Sources/Tasks/*.php' => 'Tasks',
 
 	// Themes.
-	'Themes/default/*.php' => 'DefaultTemplate',
+	'Themes/default/*.php' => 'Default',
 	'Themes/*/*.php' => 'Template',
 
 	// Languages (keep this last in the list!)
