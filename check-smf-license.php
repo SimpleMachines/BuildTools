@@ -77,6 +77,11 @@ foreach ($ignoreFiles as $if)
 
 // Lets get the version and year.
 $indexFile = fopen('./index.php', 'r');
+
+// Error?
+if ($indexFile === false)
+	die("Error: Unable to open file ./index.php\n");
+
 $indexContents = fread($indexFile, 1250);
 
 if (!preg_match('~define\(\'SMF_VERSION\', \'([^\']+)\'\);~i', $indexContents, $versionResults))
@@ -88,6 +93,10 @@ if (!preg_match('~define\(\'SMF_SOFTWARE_YEAR\', \'(\d{4})\'\);~i', $indexConten
 $currentSoftwareYear = (int) $yearResults[1];
 
 $file = fopen($currentFile, 'r');
+
+// Error?
+if ($file === false)
+	die('Error: Unable to open file ' . $currentFile . "\n");
 
 // Some files, *cough* ManageServer *cough* have lots of junk before the license, otherwise this could easily be 500.
 $contents = fread($file, 4000);

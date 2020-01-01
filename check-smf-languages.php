@@ -5,10 +5,10 @@
  *
  * @package SMF
  * @author Simple Machines http://www.simplemachines.org
- * @copyright 2019 Simple Machines and individual contributors
+ * @copyright 2020 Simple Machines and individual contributors
  * @license http://www.simplemachines.org/about/smf/license.php BSD
  *
- * @version 2.1 RC1
+ * @version 2.1 RC2
  */
 
 // Stuff we will ignore.
@@ -32,6 +32,11 @@ foreach ($ignoreFiles as $if)
 
 // Lets get the version.
 $upgradeFile = fopen('./other/upgrade.php', 'r');
+
+// Error?
+if ($upgradeFile === false)
+	die("Error: Unable to open file ./other/upgrade.php\n");
+
 $upgradeContents = fread($upgradeFile, 1250);
 
 if (!preg_match('~define\(\'SMF_LANG_VERSION\', \'([^\']+)\'\);~i', $upgradeContents, $versionResults))
@@ -39,6 +44,10 @@ if (!preg_match('~define\(\'SMF_LANG_VERSION\', \'([^\']+)\'\);~i', $upgradeCont
 $currentVersion = $versionResults[1];
 
 $file = fopen($currentFile, 'r');
+
+// Error?
+if ($file === false)
+	die('Error: Unable to open file ' . $currentFile . "\n");
 
 $contents = fread($file, 500);
 
