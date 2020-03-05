@@ -11,6 +11,6 @@ if php other/buildTools/check-version.php | grep "Error:"; then exit 1; fi
 
 if find . -name "*.php" -exec php other/buildTools/check-smf-license.php {} 2>&1 \; | grep "Error:"; then exit 1; fi
 
-if find . -name "./Themes/default/languages/*.english.php" -exec php other/buildTools/check-smf-langauge.php {} 2>&1 \; | grep "Error:"; then exit 1; fi
+if find . -name "./Themes/default/languages/*.english.php" -exec php other/buildTools/check-smf-languages.php {} 2>&1 \; | grep "Error:"; then exit 1; fi
 
 if find . -name "*.php" -exec php other/buildTools/check-eof.php {} 2>&1 \; | grep "Error:"; then exit 1; fi
