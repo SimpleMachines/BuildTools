@@ -124,7 +124,7 @@ foreach ($version_info as $location => $files)
 	ksort($version_info[$location]);
 
 // Output styles.
-if (isset($cliparams['include-languages']) && $cliparams['output'] == 'raw')
+if ($cliparams['output'] == 'raw')
 	var_dump($version_info);
 else
 {
@@ -154,7 +154,7 @@ else
 			echo "\n";
 		}
 
-		if ($location === 'Languages')
+		if ($location === 'Languages' || (!isset($cliparams['include-languages']) && $location === 'Template'))
 			echo "};\n";
 	}
 }
@@ -183,11 +183,11 @@ function prepareCLIhandler()
 	if (empty($cliparams) || isset($cliparams['help']) || isset($cliparams['h']))
 	{
 		echo "SMF Generate Detailed Versions Tool". "\n"
-			. '$ php ' . basename(__FILE__) . " path/to/smf/ [-h] [--output=raw] [--languages] [--smf=[20|21]] \n"
-			. "--include-languages	Include Languages Versions.". "\n"
-			. "--smf=[21|20]	What Version of SMF.  This defaults to SMF 21.". "\n"
-			. "-h, --help			This help file.". "\n"
-			. "--output=raw	Raw output.". "\n"
+			. '$ php ' . basename(__FILE__) . " path/to/smf/ [--output=raw] [--include-languages] [--smf=[20|21]] \n"
+			. "--include-languages   Include Languages Versions.". "\n"
+			. "--smf=[21|20]         What Version of SMF.  This defaults to SMF 21.". "\n"
+			. "-h, --help            This help file.". "\n"
+			. "--output=raw          Raw output.". "\n"
 			. "\n";
 		die;
 	}
