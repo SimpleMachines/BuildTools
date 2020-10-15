@@ -25,7 +25,7 @@ $buildFiles = array(
 	'Sources/*.php' => 'Sources',
 
 	// Tasks (SMF 2.1+)
-	'Sources/Tasks/*.php' => 'Tasks',
+	'Sources/tasks/*.php' => 'Tasks',
 
 	// Themes.
 	'Themes/default/*.php' => 'Default',
@@ -63,7 +63,7 @@ $ignoreFiles = array(
 
 // SMF 2.0?
 if ($cliparams['smf'] == '20')
-	unset($buildFiles['Sources/Tasks/*.php']);
+	unset($buildFiles['Sources/tasks/*.php']);
 
 // Skipping languages?
 if (!isset($cliparams['include-languages']))
