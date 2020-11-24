@@ -102,7 +102,7 @@ foreach ($buildFiles as $globPath => $location)
 		// Skip these files.
 		foreach ($ignoreFiles as $if)
 			if (preg_match($if, $basename))
-				continue;
+				continue 2;
 
 		// Count this.
 		++$count;
