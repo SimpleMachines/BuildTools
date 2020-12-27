@@ -47,12 +47,12 @@ $ignoreFiles = array(
 
 // No file? Thats bad.
 if (!isset($_SERVER['argv'], $_SERVER['argv'][1]))
-	die('Error: No File specified' . "\n");
+	fatalError('Error: No File specified' . "\n");
 
 // The file has to exist.
 $currentFile = $_SERVER['argv'][1];
 if (!file_exists($currentFile))
-	die('Error: File does not exist' . "\n");
+	fatalError('Error: File does not exist' . "\n");
 
 // Is this ignored?
 foreach ($ignoreFiles as $if)
@@ -64,7 +64,7 @@ $file = fopen($currentFile, 'r');
 
 // Error?
 if ($file === false)
-	die('Error: Unable to open file ' . $currentFile . "\n");
+	fatalError('Error: Unable to open file ' . $currentFile . "\n");
 
 // Seek the end minus some bytes.
 fseek($file, -100, SEEK_END);
@@ -72,16 +72,22 @@ $contents = fread($file, 100);
 
 // There is some white space here.
 if (preg_match('~\?>\s+$~', $contents, $matches))
-	die('Error: End of File contains extra spaces in ' . $currentFile . "\n");
+	fatalError('Error: End of File contains extra spaces in ' . $currentFile . "\n");
 
 // Test to see if its there even, SMF 2.1 base package needs it there in our main files to allow package manager to properly handle end operations.  Customizations do not need it.
 if (!preg_match('~\?>$~', $contents, $matches))
-	die('Error: End of File missing in ' . $currentFile . "\n");
+	fatalError('Error: End of File missing in ' . $currentFile . "\n");
 
 // Test to see if a function/class ending is here but with no return (because we are OCD).
 if (preg_match('~}([\r]?\n)?\?>~', $contents, $matches))
-	echo('Error: Incorrect return(s) after last function/class but before EOF in ' . $currentFile . "\n");
+	fatalError('Error: Incorrect return(s) after last function/class but before EOF in ' . $currentFile . "\n");
 
 // Test to see if a string ending is here but with no return (because we are OCD).
 if (preg_match('~;([\r]?\n)?\?>~', $contents, $matches))
-	echo('Error: Incorrect return(s) after last string but before EOF in ' . $currentFile . "\n");
+	fatalError('Error: Incorrect return(s) after last string but before EOF in ' . $currentFile . "\n");
+
+function fatalError($msg)
+{
+	fwrite(STDERR, $msg);
+	die;
+}
