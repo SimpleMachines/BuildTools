@@ -33,7 +33,7 @@ if (DEBUG_MODE)
 
 // Nothing?  Well darn.
 if (empty($signedoff))
-	fatalError('Error: Signed-off-by not found in commit message' . "\n");
+	die('Error: Signed-off-by not found in commit message' . "\n");
 elseif (DEBUG_MODE)
 	debugPrint('Valid signed off found');
 
@@ -168,10 +168,4 @@ function debugPrint($msg)
 {
 	if (DEBUG_MODE)
 		echo $msg, "\n";
-}
-
-function fatalError($msg)
-{
-	fwrite(STDERR, $msg . "\n");
-	die;
 }
