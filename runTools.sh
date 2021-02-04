@@ -1,16 +1,14 @@
 #!/bin/bash
 
-# Run all the scripts.
-git submodule foreach git pull origin master
+find . -type f -name "*.php" -print0 \
+    -o -path "./Sources/minify" -prune \
+    -o -path "./Sources/random_compat" -prune \
+    -o -path "./Sources/ReCaptcha" -prune \
+  | xargs -0 -n1 -P4 php -l \
+  | (! grep -v "No syntax errors detected" )
 
-if find . -name "*.php" ! -path "./vendor/*" -exec php -l {} 2>&1 \; | grep "syntax error, unexpected"; then exit 1; fi
-
-if php other/buildTools/check-signed-off.php | grep "Error:"; then php other/buildTools/check-signed-off.php; exit 1; fi
-
-if php other/buildTools/check-version.php | grep "Error:"; then exit 1; fi
-
-if find . -name "*.php" -exec php other/buildTools/check-smf-license.php {} 2>&1 \; | grep "Error:"; then exit 1; fi
-
-if find . -name "./Themes/default/languages/*.english.php" -exec php other/buildTools/check-smf-languages.php {} 2>&1 \; | grep "Error:"; then exit 1; fi
-
-if find . -name "*.php" -exec php other/buildTools/check-eof.php {} 2>&1 \; | grep "Error:"; then exit 1; fi
+php check-signed-off.php
+php check-eof.php
+php check-smf-license.php
+php check-smf-languages.php
+php check-version.php

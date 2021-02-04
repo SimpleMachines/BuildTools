@@ -33,7 +33,10 @@ if (DEBUG_MODE)
 
 // Nothing?  Well darn.
 if (empty($signedoff))
-	die('Error: Signed-off-by not found in commit message' . "\n");
+{
+	fwrite(STDERR, 'Error: Signed-off-by not found in commit message');
+	exit(1);
+}
 elseif (DEBUG_MODE)
 	debugPrint('Valid signed off found');
 

@@ -13,55 +13,56 @@
 
 // Stuff we will ignore.
 $ignoreFiles = array(
-	'./Themes/default/languages/index\.php',
+	'index\.php',
 );
 
-// No file? Thats bad.
-if (!isset($_SERVER['argv'], $_SERVER['argv'][1]))
-	die('Error: No File specified' . "\n");
+try
+{
+	if (($upgradeFile = fopen('./other/upgrade.php', 'r')) !== false)
+	{
+		$upgradeContents = fread($upgradeFile, 1250);
 
-// The file has to exist.
-$currentFile = $_SERVER['argv'][1];
-if (!file_exists($currentFile))
-	die('Error: File does not exist' . "\n");
+		if (!preg_match('~define\(\'SMF_LANG_VERSION\', \'([^\']+)\'\);~i', $upgradeContents, $versionResults))
+			throw new Exception('Error: Could not locate SMF_LANG_VERSION');
+		$currentVersion = $versionResults[1];
 
-// Is this ignored?
-foreach ($ignoreFiles as $if)
-	if (preg_match('~' . $if . '~i', $currentFile))
-		die;
+		foreach (new DirectoryIterator('./Themes/default/languages') as $fileInfo)
+		{
+			if ($fileInfo->getExtension() == 'php')
+			{
+				foreach ($ignoreFiles as $if)
+					if (preg_match('~' . $if . '~i', $fileInfo->getFilename()))
+						continue 2;
 
-// Lets get the version.
-$upgradeFile = fopen('./other/upgrade.php', 'r');
+				if (($file = fopen($fileInfo->getPathname(), 'r')) !== false)
+				{
+					$contents = fread($file, 500);
 
-// Error?
-if ($upgradeFile === false)
-	die("Error: Unable to open file ./other/upgrade.php\n");
+					// Just see if the basic match is there.
+					$match = '// Version: ' . $currentVersion;
+					if (!preg_match('~' . $match . '~i', $contents))
+						throw new Exception('Error: The version is missing or incorrect in ' . $fileInfo->getFilename());
 
-$upgradeContents = fread($upgradeFile, 1250);
+					// Get the file prefix.
+					preg_match('~([A-Za-z]+)\.english\.php~i', $fileInfo->getFilename(), $fileMatch);
+					if (empty($fileMatch))
+						throw new Exception('Error: Could not locate the file name in ' . $fileInfo->getFilename());
 
-if (!preg_match('~define\(\'SMF_LANG_VERSION\', \'([^\']+)\'\);~i', $upgradeContents, $versionResults))
-	die('Error: Could not locate SMF_LANG_VERSION' . "\n");
-$currentVersion = $versionResults[1];
-
-$file = fopen($currentFile, 'r');
-
-// Error?
-if ($file === false)
-	die('Error: Unable to open file ' . $currentFile . "\n");
-
-$contents = fread($file, 500);
-
-// Just see if the basic match is there.
-$match = '// Version: ' . $currentVersion;
-if (!preg_match('~' . $match . '~i', $contents))
-	die('Error: The version is missing or incorrect in ' . $currentFile . "\n");
-
-// Get the file prefix.
-preg_match('~([A-Za-z]+)\.english\.php~i', $currentFile, $fileMatch);
-if (empty($fileMatch))
-	die('Error: Could not locate locate the file name in ' . $currentFile . "\n");
-
-// Now match that prefix in a more strict mode.
-$match = '// Version: ' . $currentVersion . '; ' . $fileMatch[1];
-if (!preg_match('~' . $match . '~i', $contents))
-	die('Error: The version with file name is missing or incorrect in ' . $currentFile . "\n");
+					// Now match that prefix in a more strict mode.
+					$match = '// Version: ' . $currentVersion . '; ' . $fileMatch[1];
+					if (!preg_match('~' . $match . '~i', $contents))
+						throw new Exception('Error: The version with file name is missing or incorrect in ' . $fileInfo->getFilename());
+				}
+				else
+					throw new Exception('Unable to open file ' . $fileInfo->getFilename());
+			}
+		}
+	}
+	else
+		throw new Exception('Unable to open file ./upgrade.php');
+}
+catch (Exception $e)
+{
+	fwrite(STDERR, $e->getMessage());
+	exit(1);
+}
