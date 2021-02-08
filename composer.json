@@ -1,0 +1,6 @@
+{
+    "name": "simplemachines/build-tools",
+    "require": {
+        "overtrue/phplint": "^2.2"
+    }
+}
