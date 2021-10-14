@@ -25,6 +25,7 @@ $ignoreFiles = array(
 	'\./Smileys/index\.php',
 	'\./Sources/index\.php',
 	'\./Sources/tasks/index\.php',
+	'\./Sources/Unicode/index\.php',
 	'\./Themes/default/css/index\.php',
 	'\./Themes/default/fonts/index\.php',
 	'\./Themes/default/fonts/sound/index\.php',
