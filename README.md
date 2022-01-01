@@ -6,7 +6,7 @@ All scripts in this repository are under BSD 3-clause license, unless specified 
 
 ## Installation
 
-Requires PHP 5.3+, `git`, and `composer`.
+Requires PHP 7.1+, `git`, and `composer`.
 
 ### Typical Installation (via Git)
 
@@ -84,7 +84,7 @@ composer install
 ```
 
 ## How to contribute:
-* fork the repository. If you are not used to Github, please check out [fork a repository](http://help.github.com/fork-a-repo).
+* fork the repository. If you are not used to Github, please check out [fork a repository](https://help.github.com/fork-a-repo).
 * branch your repository, to commit the desired changes.
 * sign-off your commits, to acknowledge your submission under the license of the project.
   * Please see the [Developer's Certificate of Origin](https://github.com/SimpleMachines/buildTools/blob/master/DCO.txt) in the repository:
