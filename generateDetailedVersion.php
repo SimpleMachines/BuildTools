@@ -124,7 +124,7 @@ foreach ($version_info as $location => $files)
 	ksort($version_info[$location]);
 
 // Output styles.
-if ($cliparams['output'] == 'raw')
+if (isset($cliparams['output']) && $cliparams['output'] == 'raw')
 	var_dump($version_info);
 else
 {
@@ -135,6 +135,7 @@ else
 		elseif ($location === 'Languages')
 			echo "};\n\nwindow.smfLanguageVersions = {\n";
 
+		$i = 0;
 		foreach ($files as $file => $version)
 		{
 			++$i;
