@@ -41,7 +41,7 @@ $ignoreFiles = array(
 
 	// Cache and miscellaneous.
 	'\./cache/',
-	'\./other/',
+	'\./other/db_last_error\.php',
 	'\./tests/',
 	'\./vendor/',
 
@@ -58,6 +58,10 @@ $ignoreFiles = array(
 	'\./Settings\.php',
 	'\./Settings_bak\.php',
 	'\./db_last_error\.php',
+);
+
+$checkVersionAndYearFiles = array(
+	'\./other/.*\.php',
 );
 
 try
@@ -103,17 +107,30 @@ try
 					if (!preg_match('~' . implode('', $match) . '~i', $contents))
 						throw new Exception('License File is invalid or not found in ' . $currentFile);
 
-					// Check the year is correct.
-					$yearMatch = $match;
-					$yearMatch[4] = ' \* @copyright ' . $currentSoftwareYear . ' Simple Machines and individual contributors' . '[\r]?\n';
-					if (!preg_match('~' . implode('', $yearMatch) . '~i', $contents))
-						throw new Exception('The software year is incorrect in ' . $currentFile);
+					$shouldCheckVersionAndYear = false;
+					foreach ($checkVersionAndYearFiles as $f)
+					{
+						if (preg_match('~' . $f . '~i', $currentFile))
+						{
+							$shouldCheckVersionAndYear = true;
+							break;
+						}
+					}
 
-					// Check the version is correct.
-					$versionMatch = $match;
-					$versionMatch[7] = ' \* @version ' . $currentVersion . '[\r]?\n';
-					if (!preg_match('~' . implode('', $versionMatch) . '~i', $contents))
-						throw new Exception('The version is incorrect in ' . $currentFile);
+					if ($shouldCheckVersionAndYear)
+					{
+						// Check the year is correct.
+						$yearMatch = $match;
+						$yearMatch[4] = ' \* @copyright ' . $currentSoftwareYear . ' Simple Machines and individual contributors' . '[\r]?\n';
+						if (!preg_match('~' . implode('', $yearMatch) . '~i', $contents))
+							throw new Exception('The software year is incorrect in ' . $currentFile);
+
+						// Check the version is correct.
+						$versionMatch = $match;
+						$versionMatch[7] = ' \* @version ' . $currentVersion . '[\r]?\n';
+						if (!preg_match('~' . implode('', $versionMatch) . '~i', $contents))
+							throw new Exception('The version is incorrect in ' . $currentFile);
+					}
 				}
 				else
 					throw new Exception('Unable to open file ' . $currentFile);
