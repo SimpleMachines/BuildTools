@@ -61,6 +61,10 @@ $ignoreFiles = array(
 );
 
 $checkVersionAndYearFiles = array(
+	'\./index\.php',
+	'\./SSI\.php',
+	'\./cron\.php',
+	'\./proxy\.php',
 	'\./other/.*\.php',
 );
 
