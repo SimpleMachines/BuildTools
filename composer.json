@@ -1,6 +1,11 @@
 {
     "name": "simplemachines/build-tools",
     "require": {
-        "overtrue/phplint": "^2.2"
+        "overtrue/phplint": "3.0"
+    },
+    "config": {
+        "platform": {
+            "php": "7.0.2"
+        }
     }
 }
