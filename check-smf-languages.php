@@ -14,6 +14,7 @@
 // Stuff we will ignore.
 $ignoreFiles = array(
 	'index\.php',
+	'\.(?!php)[^.]*$',
 );
 
 try
@@ -22,6 +23,13 @@ try
 	{
 		$upgradeContents = fread($upgradeFile, 1250);
 
+		// In production, only check index.english.php
+		if (!preg_match('~define\(\'SMF_VERSION\', \'([^\']+)\'\);~i', $upgradeContents, $versionResults))
+			throw new Exception('Error: Could not locate SMF_VERSION');
+		if (version_compare($versionResults[1], '2.1.0', '>'))
+			$ignoreFiles[] = '^(?!index\.)';
+
+		// We need SMF_LANG_VERSION, obviously.
 		if (!preg_match('~define\(\'SMF_LANG_VERSION\', \'([^\']+)\'\);~i', $upgradeContents, $versionResults))
 			throw new Exception('Error: Could not locate SMF_LANG_VERSION');
 		$currentVersion = $versionResults[1];
