@@ -42,6 +42,8 @@ $ignoreFiles = array(
 	// Cache and miscellaneous.
 	'\./cache/',
 	'\./other/db_last_error\.php',
+	'\./other/update_version_numbers.php',
+	'\./other/update_unicode_data.php',
 	'\./tests/',
 	'\./vendor/',
 
