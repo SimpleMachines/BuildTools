@@ -24,7 +24,26 @@ $ignoreFiles = array(
 	'\./Smileys/[A-Za-z0-9]+/index\.php',
 	'\./Smileys/index\.php',
 	'\./Sources/index\.php',
+	'\./Sources/Actions/index\.php',
+	'\./Sources/Actions/Admin/index\.php',
+	'\./Sources/Actions/Moderation/index\.php',
+	'\./Sources/Actions/Profile/index\.php',
+	'\./Sources/Cache/index\.php',
+	'\./Sources/Cache/APIs/index\.php',
+	'\./Sources/Db/index\.php',
+	'\./Sources/Db/APIs/index\.php',
+	'\./Sources/Graphics/index\.php',
+	'\./Sources/Graphics/Gif/index\.php',
+	'\./Sources/PackageManager/index\.php',
+	'\./Sources/PersonalMessage/index\.php',
+	'\./Sources/Search/index\.php',
+	'\./Sources/Search/APIs/index\.php',
+	'\./Sources/Subscriptions/index\.php',
+	'\./Sources/Subscriptions/PayPal/index\.php',
 	'\./Sources/tasks/index\.php',
+	'\./Sources/TOTP/index\.php',
+	'\./Sources/WebFetch/index\.php',
+	'\./Sources/WebFetch/APIs/index\.php',
 	'\./Sources/Unicode/index\.php',
 	'\./Themes/default/css/index\.php',
 	'\./Themes/default/fonts/index\.php',
@@ -74,7 +93,7 @@ try
 {
 	if (($indexFile = fopen('./index.php', 'r')) !== false)
 	{
-		$indexContents = fread($indexFile, 1250);
+		$indexContents = fread($indexFile, 1500);
 
 		if (!preg_match('~define\(\'SMF_VERSION\', \'([^\']+)\'\);~i', $indexContents, $versionResults))
 			throw new Exception('Could not locate SMF_VERSION');
