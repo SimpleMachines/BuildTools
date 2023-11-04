@@ -13,15 +13,22 @@
 
 try
 {
+	$smf_version = '';
 	$versions = array();
 	$years = array();
 	foreach (array('./index.php', './SSI.php', './cron.php', './proxy.php', './other/install.php', './other/upgrade.php') as $path)
 	{
-		$contents = file_get_contents($path, false, null, 0, 1250);
+		if (in_array($path, array('./SSI.php', './cron.php', './proxy.php')) && version_compare($smf_version, '3.0 Alpha 1', '>='))
+			continue;
+
+		$contents = file_get_contents($path, false, null, 0, 1500);
 
 		if (!preg_match('/define\(\'SMF_VERSION\', \'([^\']+)\'\);/i', $contents, $versionResults))
 			throw new Exception('Error: Could not locate SMF_VERSION in ' . $path);
 		$versions[$versionResults[1]][] = $path;
+
+		if (empty($smf_version))
+			$smf_version = $versionResults[1];
 
 		if (!preg_match('/define\(\'SMF_SOFTWARE_YEAR\', \'(\d{4})\'\);/i', $contents, $yearResults))
 			throw new Exception('Error: Could not locate SMF_SOFTWARE_YEAR in ' . $path);
