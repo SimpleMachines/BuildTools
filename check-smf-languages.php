@@ -34,7 +34,11 @@ try
 			throw new Exception('Error: Could not locate SMF_LANG_VERSION');
 		$currentVersion = $versionResults[1];
 
-		foreach (new DirectoryIterator('./Themes/default/languages') as $fileInfo)
+		$language_dir = './Themes/default/languages';
+		if (file_exists('./Languages'))
+			$language_dir = './Languages';
+
+		foreach (new DirectoryIterator($language_dir) as $fileInfo)
 		{
 			if ($fileInfo->getExtension() == 'php')
 			{
