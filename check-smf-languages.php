@@ -36,10 +36,10 @@ try
 		$currentVersion = $versionResults[1];
 
 		if (!file_exists('./Languages'))
-			checkLanguageDirectory('./Themes/default/languages', 'english');
+			checkLanguageDirectory('./Themes/default/languages', '~([A-Za-z]+)\.english\.php~i');
 		else
 		{
-			checkLanguageDirectory('./Languages/en-us', 'en-us');
+			checkLanguageDirectory('./Languages/en_US', '~([A-Za-z]+)\.php~i');
 //			foreach (new DirectoryIterator('./Languages') as $dirInfo)
 //				if(!in_array($dirInfo->getFileName(), ['.', '..']) && is_dir($dirInfo->getPathname()))
 //					checkLanguageDirectory($dirInfo->getPathname());
@@ -54,7 +54,7 @@ catch (Exception $e)
 	exit(1);
 }
 
-function checkLanguageDirectory($language_dir, $lang)
+function checkLanguageDirectory($language_dir, $search)
 {
 	global $ignoreFiles, $currentVersion;
 
@@ -76,7 +76,7 @@ function checkLanguageDirectory($language_dir, $lang)
 					throw new Exception('Error: The version is missing or incorrect in ' . $fileInfo->getPathname());
 
 				// Get the file prefix.
-				preg_match('~([A-Za-z]+)\.' . $lang . '\.php~i', $fileInfo->getFilename(), $fileMatch);
+				preg_match($search, $fileInfo->getFilename(), $fileMatch);
 				if (empty($fileMatch))
 					throw new Exception('Error: Could not locate the file name in ' . $fileInfo->getPathname());
 
