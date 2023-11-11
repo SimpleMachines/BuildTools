@@ -57,7 +57,7 @@ $ignoreFiles = array(
 
 	// Language Files are ignored as they don't use the License format.
 	'./Themes/default/languages/[A-Za-z0-9]+\.english\.php',
-	'./Languages/[A-Za-z0-9]+\.english\.php',
+	'./Languages/en-us/[A-Za-z0-9]+\.php',
 	'\./Languages/index\.php',
 
 	// Cache and miscellaneous.
