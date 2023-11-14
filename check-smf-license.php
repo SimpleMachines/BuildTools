@@ -34,6 +34,8 @@ $ignoreFiles = array(
 	'\./Sources/Db/APIs/index\.php',
 	'\./Sources/Graphics/index\.php',
 	'\./Sources/Graphics/Gif/index\.php',
+	'\./Sources/MailAgent/index\.php',
+	'\./Sources/MailAgent/APIs/index\.php',
 	'\./Sources/PackageManager/index\.php',
 	'\./Sources/PersonalMessage/index\.php',
 	'\./Sources/Search/index\.php',
@@ -118,6 +120,17 @@ try
 				{
 					// Some files, *cough* ManageServer *cough* have lots of junk before the license, otherwise this could easily be 500.
 					$contents = fread($file, 4000);
+
+					// Is this a index.php? Maybe it is supposed to not have it.
+					if ($fileInfo->getFilename() == 'index.php')
+					{
+						$ignoreContents = '<\?php\s+\/\/ Try to handle it with the upper level index\.php\. \(it should know what to do\.\)[\r]?\nif \(file_exists\(dirname\(dirname\(__FILE__\)\) \. \'\/index\.php\'\)\)[\r]?\n\s+include \(dirname\(dirname\(__FILE__\)\) \. \'\/index\.php\'\);[\r]?\nelse[\r]?\n\s+exit;[\r]?\n\s+\?>';
+
+						$ignoreContents2 = '<\?php\s+\/\/ Try to handle it with the upper level index\.php\. \(it should know what to do\.\)[\r]?\nif \(file_exists\(dirname\(__DIR__\) \. \'\/index\.php\'\)\)[\r]?\n\s+include \(dirname\(__DIR__\) \. \'\/index\.php\'\);[\r]?\nelse[\r]?\n\s+exit;[\r]?\n\s+\?>';
+
+						if (preg_match('~' . $ignoreContents . '~i', $contents) || preg_match('~' . $ignoreContents2 . '~i', $contents) )
+							continue;
+					}
 
 					// How the license file should look, in a regex type format.
 					$match = array(
