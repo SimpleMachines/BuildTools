@@ -16,16 +16,19 @@ if (php_sapi_name() !== 'cli')
 prepareCLIhandler();
 
 // All the stuff we need to build and their versions.
-$buildFiles = array(
+$buildFiles = [
 	'index.php' => 'SMF',
 
-	// Sources
-	'SSI.php' => 'Sources',
-	'subscriptions.php' => 'Sources',
-	'Sources/*.php' => 'Sources',
+	'cron.php' => 'Root',
+	'subscriptions.php' => 'Root',
+	'proxy.php' => 'Root',
+	'SSI.php' => 'Root',
 
-	// Tasks (SMF 2.1+)
-	'Sources/tasks/*.php' => 'Tasks',
+	// Sources
+	'Sources/*' => 'Sources',
+
+	// Tasks.
+	'Sources/Tasks/*' => 'Tasks',
 
 	// Themes.
 	'Themes/default/*.php' => 'Default',
@@ -33,37 +36,41 @@ $buildFiles = array(
 
 	// Languages (keep this last in the list!)
 	'Themes/default/languages/*.english.php' => 'Languages',
-);
+];
+
+$skipSourceFiles = [
+	'minify/*',
+	'ReCaptcha/*',
+	'Tasks/*'
+];
 
 // Read lengths
-$readLengths = array(
+$readLengths = [
 	'SMF' => 4096,
+	'Root' => 4096,
 	'Sources' => 4096,
 	'Tasks' => 4096,
 	'Default' => 768,
 	'Template' => 768,
 	'Languages' => 768
-);
+];
 
 // Search strings.
-$searchStrings = array(
+$searchStrings = [
 	'SMF' => '~\*\s@version\s+(.+)[\s]{2}~i',
+	'Root' => '~\*\s@version\s+(.+)[\s]{2}~i',
 	'Sources' => '~\*\s@version\s+(.+)[\s]{2}~i',
 	'Tasks' => '~\*\s@version\s+(.+)[\s]{2}~i',
 	'Default' => '~\*\s@version\s+(.+)[\s]{2}~i',
 	'Template' => '~\*\s@version\s+(.+)[\s]{2}~i',
 	'Languages' => '~(?://|/\*)\s*Version:\s+(.+?);\s*~i'
-);
+];
 
 // Ignorables.
-$ignoreFiles = array(
+$ignoreFiles = [
 	'|\./*.php~|i',
 	'|\./*.txt|i',
-);
-
-// SMF 2.0?
-if ($cliparams['smf'] == '20')
-	unset($buildFiles['Sources/tasks/*.php']);
+];
 
 // Skipping languages?
 if (!isset($cliparams['include-languages']))
@@ -86,36 +93,77 @@ $version_info = array();
 $count = 0;
 foreach ($buildFiles as $globPath => $location)
 {
-	// Get a list of files.
-	$files = glob($smfRoot . $globPath);
+	// Lets be specail here.
+	if ($globPath == 'Sources/*') {
+		$files = new RecursiveIteratorIterator(
+			new RecursiveDirectoryIterator(
+				'Sources' . DIRECTORY_SEPARATOR,
+				RecursiveDirectoryIterator::SKIP_DOTS
+			)
+		);
 
-	if (!isset($version_info[$location]))
-		$version_info[$location] = array();
+		// Someday we could simplify this?
+		foreach ($files as $shortname => $file)
+		{
+			if ($file->getFilename() === 'index.php' || $file->getFilename()[0] === '.' || $file->getExtension() !== 'php')
+				continue;
 
-	foreach ($files as $file)
-	{
-		$basename = basename($file);
+			$basename = basename($file);
+			foreach ($ignoreFiles as $if)
+				if (preg_match($if, $basename))
+					continue 2;
 
-		// Skip index files.
-		if ($basename == 'index.php' && $location != 'SMF')
-			continue;
-		// Skip these files.
-		foreach ($ignoreFiles as $if)
-			if (preg_match($if, $basename))
-				continue 2;
+			foreach ($skipSourceFiles as $if)
+				if (preg_match('~' . $if . '~i', $shortname))
+					continue 2;
 
-		// Count this.
-		++$count;
+			// Count this.
+			++$count;
 
-		// Open the file, read it and close it.
-		$fp = fopen($file, 'r');
-		$header = fread($fp, $readLengths[$location]);
-		fclose($fp);
+			// Open the file, read it and close it.
+			$fp = fopen($file, 'r');
+			$header = fread($fp, $readLengths[$location]);
+			fclose($fp);
 
-		if (preg_match($searchStrings[$location], $header, $match) == 1)
-			$version_info[$location][$basename] = $match[1];
-		else
-			$version_info[$location][$basename] = '???';
+			$filename = str_replace('Sources/', '', $shortname);
+			if (preg_match($searchStrings[$location], $header, $match) == 1)
+				$version_info[$location][$filename] = $match[1];
+			else
+				$version_info[$location][$filename] = '???';
+		}
+	}
+	else {
+		// Get a list of files.
+		$files = glob($smfRoot . $globPath);
+
+		if (!isset($version_info[$location]))
+			$version_info[$location] = array();
+
+		foreach ($files as $file)
+		{
+			$basename = basename($file);
+
+			// Skip index files.
+			if ($basename == 'index.php' && $location != 'SMF')
+				continue;
+			// Skip these files.
+			foreach ($ignoreFiles as $if)
+				if (preg_match($if, $basename))
+					continue 2;
+
+			// Count this.
+			++$count;
+
+			// Open the file, read it and close it.
+			$fp = fopen($file, 'r');
+			$header = fread($fp, $readLengths[$location]);
+			fclose($fp);
+
+			if (preg_match($searchStrings[$location], $header, $match) == 1)
+				$version_info[$location][$basename] = $match[1];
+			else
+				$version_info[$location][$basename] = '???';
+		}
 	}
 }
 
@@ -184,9 +232,9 @@ function prepareCLIhandler()
 	if (empty($cliparams) || isset($cliparams['help']) || isset($cliparams['h']))
 	{
 		echo "SMF Generate Detailed Versions Tool". "\n"
-			. '$ php ' . basename(__FILE__) . " path/to/smf/ [--output=raw] [--include-languages] [--smf=[20|21]] \n"
+			. '$ php ' . basename(__FILE__) . " path/to/smf/ [--output=raw] [--include-languages] [--smf=[30]] \n"
 			. "--include-languages   Include Languages Versions.". "\n"
-			. "--smf=[21|20]         What Version of SMF.  This defaults to SMF 21.". "\n"
+			. "--smf=[30]         What Version of SMF.  This defaults to SMF 30.". "\n"
 			. "-h, --help            This help file.". "\n"
 			. "--output=raw          Raw output.". "\n"
 			. "\n";
@@ -195,5 +243,5 @@ function prepareCLIhandler()
 
 	// Default SMF version.
 	if (!isset($cliparams['smf']))
-		$cliparams['smf'] = '21';
+		$cliparams['smf'] = '30';
 }
