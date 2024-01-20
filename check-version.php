@@ -5,60 +5,63 @@
  *
  * @package SMF
  * @author Simple Machines https://www.simplemachines.org
- * @copyright 2022 Simple Machines and individual contributors
+ * @copyright 2024 Simple Machines and individual contributors
  * @license https://www.simplemachines.org/about/smf/license.php BSD
  *
- * @version 2.1.0
+ * @version 3.0 Alpha 1
  */
 
-try
-{
+try {
 	$smf_version = '';
-	$versions = array();
-	$years = array();
-	foreach (array('./index.php', './SSI.php', './cron.php', './proxy.php', './other/install.php', './other/upgrade.php') as $path)
+	$versions = [];
+	$years = [];
+	foreach (['./index.php', './SSI.php', './cron.php', './proxy.php', './other/install.php', './other/upgrade.php'] as $path)
 	{
-		if (in_array($path, array('./SSI.php', './cron.php', './proxy.php')) && version_compare($smf_version, '3.0 Alpha 1', '>='))
+		if (in_array($path, ['./SSI.php', './cron.php', './proxy.php']) && version_compare($smf_version, '3.0 Alpha 1', '>='))
 			continue;
 
 		$contents = file_get_contents($path, false, null, 0, 1500);
 
-		if (!preg_match('/define\(\'SMF_VERSION\', \'([^\']+)\'\);/i', $contents, $versionResults))
+		if (!preg_match('/define\(\'SMF_VERSION\', \'([^\']+)\'\);/i', $contents, $versionResults)) {
 			throw new Exception('Error: Could not locate SMF_VERSION in ' . $path);
+		}
 		$versions[$versionResults[1]][] = $path;
 
-		if (empty($smf_version))
+		if (empty($smf_version)) {
 			$smf_version = $versionResults[1];
+		}
 
-		if (!preg_match('/define\(\'SMF_SOFTWARE_YEAR\', \'(\d{4})\'\);/i', $contents, $yearResults))
+		if (!preg_match('/define\(\'SMF_SOFTWARE_YEAR\', \'(\d{4})\'\);/i', $contents, $yearResults)) {
 			throw new Exception('Error: Could not locate SMF_SOFTWARE_YEAR in ' . $path);
+		}
 		$years[$yearResults[1]][] = $path;
 	}
 
-	if (count($versions) != 1)
-	{
+	if (count($versions) != 1) {
 		$errmsg = 'Error: SMF_VERSION differs between files.';
-		foreach ($versions as $version => $paths)
+		foreach ($versions as $version => $paths) {
 			$errmsg .= ' "' . $version . '" in ' . implode(', ', $paths) . '.';
+		}
 		throw new Exception($errmsg);
 	}
 
-	if (count($years) != 1)
-	{
+	if (count($years) != 1) {
 		$errmsg = 'Error: SMF_SOFTWARE_YEAR differs between files.';
-		foreach ($years as $year => $paths)
+		foreach ($years as $year => $paths) {
 			$errmsg .= ' "' . $year . '" in ' . implode(', ', $paths) . '.';
+		}
 		throw new Exception($errmsg);
 	}
 
-	if (!preg_match('~^((\d+)\.(\d+)[. ]?((?:(?<= )(?>RC|Beta |Alpha ))?\d+)?)$~', key($versions)))
+	if (!preg_match('~^((\d+)\.(\d+)[. ]?((?:(?<= )(?>RC|Beta |Alpha ))?\d+)?)$~', key($versions))) {
 		throw new Exception('Error: SMF_VERSION string is invalid: "' . key($versions) . '"');
+	}
 
-	if (($headyear = (int) substr(shell_exec('git show -s --format=%ci HEAD'), 0, 4)) > (int) key($years))
+	if (($headyear = (int) substr(shell_exec('git show -s --format=%ci HEAD'), 0, 4)) > (int) key($years)) {
 		throw new Exception('Error: SMF_SOFTWARE_YEAR is ' . (int) key($years) . ', should be ' . $headyear . '.');
+	}
 }
-catch (Exception $e)
-{
+catch (Exception $e) {
 	fwrite(STDERR, $e->getMessage());
 	exit(1);
 }

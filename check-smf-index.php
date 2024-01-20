@@ -5,7 +5,7 @@
  *
  * @package SMF
  * @author Simple Machines https://www.simplemachines.org
- * @copyright 2023 Simple Machines and individual contributors
+ * @copyright 2024 Simple Machines and individual contributors
  * @license https://www.simplemachines.org/about/smf/license.php BSD
  *
  * @version 3.0 Alpha 1
@@ -41,19 +41,22 @@ try
 		if (!$dir->isDir())
 			continue;
 
-		foreach ($ignoreIndexFiles as $if)
-			if (preg_match('~' . $if . '~i', $currentDirectory))
+		foreach ($ignoreIndexFiles as $if) {
+			if (preg_match('~' . $if . '~i', $currentDirectory)) {
 				continue 2;
+			}
+		}
 
-		if (!file_exists($currentDirectory . '/index.php'))
+		if (!file_exists($currentDirectory . '/index.php')) {
 			throw new Exception('Index file missing in ' . $currentDirectory);
+		}
 
-		if (file_get_contents($currentDirectory . '/index.php') != $contents)
+		if (file_get_contents($currentDirectory . '/index.php') != $contents) {
 			throw new Exception('Index content does not match in ' . $currentDirectory);
+		}
 	}
 }
-catch (Exception $e)
-{
+catch (Exception $e) {
 	fwrite(STDERR, $e->getMessage());
 	exit(1);
 }

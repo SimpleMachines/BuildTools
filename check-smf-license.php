@@ -5,14 +5,14 @@
  *
  * @package SMF
  * @author Simple Machines https://www.simplemachines.org
- * @copyright 2022 Simple Machines and individual contributors
+ * @copyright 2024 Simple Machines and individual contributors
  * @license https://www.simplemachines.org/about/smf/license.php BSD
  *
- * @version 2.1.0
+ * @version 3.0 Alpha 1
  */
 
 // Stuff we will ignore.
-$ignoreFiles = array(
+$ignoreFiles = [
 	// Index files.
 	'\./attachments/index\.php',
 	'\./avatars/index\.php',
@@ -56,40 +56,44 @@ $ignoreFiles = array(
 	'\./Settings\.php',
 	'\./Settings_bak\.php',
 	'\./db_last_error\.php',
-);
+];
 
-$checkVersionAndYearFiles = array(
+$checkVersionAndYearFiles = [
 	'\./index\.php',
 	'\./SSI\.php',
 	'\./cron\.php',
 	'\./proxy\.php',
 	'\./other/.*\.php',
-);
+];
 
-try
-{
-	if (($indexFile = fopen('./index.php', 'r')) !== false)
-	{
+try {
+	if (($indexFile = fopen('./index.php', 'r')) !== false) {
 		$indexContents = fread($indexFile, 1500);
 
-		if (!preg_match('~define\(\'SMF_VERSION\', \'([^\']+)\'\);~i', $indexContents, $versionResults))
+		if (!preg_match('~define\(\'SMF_VERSION\', \'([^\']+)\'\);~i', $indexContents, $versionResults)) {
 			throw new Exception('Could not locate SMF_VERSION');
+		}
 		$currentVersion = $versionResults[1];
 
-		if (!preg_match('~define\(\'SMF_SOFTWARE_YEAR\', \'(\d{4})\'\);~i', $indexContents, $yearResults))
+		if (!preg_match('~define\(\'SMF_SOFTWARE_YEAR\', \'(\d{4})\'\);~i', $indexContents, $yearResults)) {
 			throw new Exception('Could not locate SMF_SOFTWARE_YEAR');
+		}
 		$currentSoftwareYear = (int) $yearResults[1];
 
-		foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator('.', FilesystemIterator::UNIX_PATHS)) as $currentFile => $fileInfo)
-		{
-			if ($fileInfo->getExtension() == 'php')
-			{
-				foreach ($ignoreFiles as $if)
-					if (preg_match('~' . $if . '~i', $currentFile))
-						continue 2;
+		foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator('.', FilesystemIterator::UNIX_PATHS)) as $currentFile => $fileInfo) {
+			// Starts with a dot, skip.  Also gets Mac OS X resource files.
+			if ($currentFile[0] == '.') {
+				continue;
+			}
 
-				if (($file = fopen($currentFile, 'r')) !== false)
-				{
+			if ($fileInfo->getExtension() == 'php') {
+				foreach ($ignoreFiles as $if) {
+					if (preg_match('~' . $if . '~i', $currentFile)) {
+						continue 2;
+					}
+				}
+
+				if (($file = fopen($currentFile, 'r')) !== false) {
 					// Some files, *cough* ManageServer *cough* have lots of junk before the license, otherwise this could easily be 500.
 					$contents = fread($file, 4000);
 
@@ -106,44 +110,43 @@ try
 					);
 
 					// Just see if the license is there.
-					if (!preg_match('~' . implode('', $match) . '~i', $contents))
+					if (!preg_match('~' . implode('', $match) . '~i', $contents)) {
 						throw new Exception('License File is invalid or not found in ' . $currentFile);
+					}
 
 					$shouldCheckVersionAndYear = false;
-					foreach ($checkVersionAndYearFiles as $f)
-					{
-						if (preg_match('~' . $f . '~i', $currentFile))
-						{
+					foreach ($checkVersionAndYearFiles as $f) {
+						if (preg_match('~' . $f . '~i', $currentFile)) {
 							$shouldCheckVersionAndYear = true;
 							break;
 						}
 					}
 
-					if ($shouldCheckVersionAndYear)
-					{
+					if ($shouldCheckVersionAndYear) {
 						// Check the year is correct.
 						$yearMatch = $match;
 						$yearMatch[4] = ' \* @copyright ' . $currentSoftwareYear . ' Simple Machines and individual contributors' . '[\r]?\n';
-						if (!preg_match('~' . implode('', $yearMatch) . '~i', $contents))
+						if (!preg_match('~' . implode('', $yearMatch) . '~i', $contents)) {
 							throw new Exception('The software year is incorrect in ' . $currentFile);
+						}
 
 						// Check the version is correct.
 						$versionMatch = $match;
 						$versionMatch[7] = ' \* @version ' . $currentVersion . '[\r]?\n';
-						if (!preg_match('~' . implode('', $versionMatch) . '~i', $contents))
+						if (!preg_match('~' . implode('', $versionMatch) . '~i', $contents)) {
 							throw new Exception('The version is incorrect in ' . $currentFile);
+						}
 					}
-				}
-				else
+				} else {
 					throw new Exception('Unable to open file ' . $currentFile);
+				}
 			}
 		}
-	}
-	else
+	} else {
 		throw new Exception('Unable to open file ./index.php');
+	}
 }
-catch (Exception $e)
-{
+catch (Exception $e) {
 	fwrite(STDERR, $e->getMessage());
 	exit(1);
 }
