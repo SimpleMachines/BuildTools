@@ -59,7 +59,7 @@ function checkLanguageDirectory($language_dir, $search)
 
 	foreach (new DirectoryIterator($language_dir) as $fileInfo) {
 		// Starts with a dot, skip.  Also gets Mac OS X resource files.
-		if ($currentFile[0] == '.') {
+		if ($fileInfo->getFilename()[0] == '.') {
 			continue;
 		}
 
