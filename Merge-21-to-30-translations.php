@@ -12,8 +12,10 @@
  */
 
 // Directories we need to work with.  Should be releative fo the translation export.
-$directory21 = 'SMF_2-1';
-$directory30 = 'SMF_3-0_NEXT';
+// The Crowdin file comes from Export Translations in Crowdin by choosing all languages.
+$directory21 = 'Crowdin/SMF_2-1';
+$directory30 = 'Crowdin/SMF_3-0_NEXT';
+$smf30languages = 'SMF3.0/Languages/en_US';
 
 // Get the listing of languages.
 $dir = getcwd();
@@ -147,6 +149,26 @@ foreach ($langs30 as $l) {
 	}
 };
 
+// Find all ICU strings.
+$icuKeys = [];
+foreach(glob($smf30languages . '/*.php') as $file) {
+	if (basename($file) === 'index.php') {
+		continue;
+	}
+
+	foreach (['txt', 'txtBirthdayEmails', 'tztxt', 'editortxt', 'helptxt'] as $var) {
+		${$var} = [];
+	}
+
+	include($file);
+
+	foreach (['txt', 'txtBirthdayEmails', 'tztxt', 'editortxt', 'helptxt'] as $var) {
+		foreach(${$var} as $key => $val) {
+			findIcuKeys($icuKeys, ${$var});
+		}
+	}
+}
+
 if (is_dir($dir. '/MERGED')) {
 	rrmdir($dir. '/MERGED');
 }
@@ -180,7 +202,7 @@ foreach ($langs as $locale => $lang) {
 		// Crowdin exported some strings wrong.  Try to fix it.
 		$contents21 = file_get_contents($file21);
 		try {
-			$contents21 = preg_replace('~\\\\\\\\\'~', '\\\\\\\\\\\'', $contents21);
+			//$contents21 = preg_replace('~ \\\\\\\'~', '\\\\\\\\\\\'', $contents21);
 			$contents21 = strtr($contents21, [
 				'<' . '?' . 'php' => '',
 				'?' . '>' => ''
@@ -197,18 +219,23 @@ foreach ($langs as $locale => $lang) {
 		$contents = file_get_contents($file30);
 
 		foreach (['txt', 'txtBirthdayEmails', 'tztxt', 'editortxt', 'helptxt'] as $var) {
-			replaceContents($contents, ${$var});
+			replaceContents($contents, ${$var}, $icuKeys);
 		}
 
 		file_put_contents($newFile, $contents);
 	}
 }
 
-function replaceContents(&$contents, array $vars) {
+function replaceContents(string &$contents, array $vars, array $icuKeys) {
 	foreach ($vars as $key => $value) {
 		if (is_array($value)) {
-			replaceContents($contents, $value);
+			replaceContents($contents, $value, $icuKeys);
 		} else {
+			// If this was detected as a ICU key we updated, don't do it.
+			if (in_array($key, $icuKeys)) {
+				continue;
+			}
+
 			$contents = preg_replace(
 				'~\[\'' . $key . '\']\s+=\s+\'([^\';]+)\';~i',
 				'[\'' . $key . '\'] = \'' . $value . '\';',
@@ -218,7 +245,19 @@ function replaceContents(&$contents, array $vars) {
 	}
 }
 
-function rrmdir($dir) {
+function findIcuKeys(array &$icuKeys, array $vars) {
+	foreach ($vars as $key => $value) {
+		if (is_array($value)) {
+			findIcuKeys($icuKeys, $value);
+		} else {
+			if (strpos($value, '{') > 0) {
+				$icuKeys[] = $key;
+			}
+		}
+	}
+}
+
+function rrmdir(string $dir) {
 	$files = new RecursiveIteratorIterator(
 		new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
 		RecursiveIteratorIterator::CHILD_FIRST
@@ -232,7 +271,7 @@ function rrmdir($dir) {
 	rmdir($dir);
 }
 
-function rcopy($source, $dest) {
+function rcopy(string $source, string $dest) {
 	mkdir($dest, 0755);
 	foreach (
 	 $iterator = new \RecursiveIteratorIterator(
