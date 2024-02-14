@@ -12,7 +12,7 @@
  */
 
 // Directories we need to work with.  Should be releative fo the translation export.
-$directory21 = 'SMF_2-1_NEXT';
+$directory21 = 'SMF_2-1';
 $directory30 = 'SMF_3-0_NEXT';
 
 // Get the listing of languages.
