@@ -15,7 +15,7 @@ try {
 	$smf_version = '';
 	$versions = [];
 	$years = [];
-	foreach (['./index.php', './SSI.php', './cron.php', './proxy.php', './other/install.php', './other/upgrade.php'] as $path)
+	foreach (['./index.php', './SSI.php', './cron.php', './proxy.php'] as $path)
 	{
 		if (in_array($path, ['./SSI.php', './cron.php', './proxy.php']) && version_compare($smf_version, '3.0 Alpha 1', '>='))
 			continue;

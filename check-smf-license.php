@@ -25,6 +25,7 @@ $ignoreFiles = [
 	'\./Smileys/index\.php',
 	'\./Sources/index\.php',
 	'\./Sources/[\w/]+/index\.php',
+	'\./other/Schema/[\w/]+/*\.php',
 	'\./Themes/default/index\.php',
 	'\./Themes/default/[\w/]+/index\.php',
 	'\./Themes/index\.php',
