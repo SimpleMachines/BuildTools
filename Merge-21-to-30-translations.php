@@ -15,6 +15,7 @@
 // The Crowdin file comes from Export Translations in Crowdin by choosing all languages.
 $directory21 = 'Crowdin/SMF_2-1';
 $directory30 = 'Crowdin/SMF_3-0_NEXT';
+$directoryMerged = 'Crowdin/MERGED';
 $smf30languages = 'SMF3.0/Languages/en_US';
 
 // Get the listing of languages.
@@ -141,11 +142,11 @@ foreach ($langs30 as $l) {
 		$langs[$locale] = [
 			'21' => null,
 			'30' => $l,
-			'merged' => str_replace('SMF_3-0_NEXT', 'MERGED', $l)
+			'merged' => str_replace($directory30, $directoryMerged, $l)
 		];
 	} else {
 		$langs[$locale]['30'] = $l;
-		$langs[$locale]['merged'] = str_replace('SMF_3-0_NEXT', 'MERGED', $l);
+		$langs[$locale]['merged'] = str_replace($directory30, $directoryMerged, $l);
 	}
 };
 
@@ -169,10 +170,10 @@ foreach(glob($smf30languages . '/*.php') as $file) {
 	}
 }
 
-if (is_dir($dir. '/MERGED')) {
-	rrmdir($dir. '/MERGED');
+if (is_dir($dir. $directoryMerged)) {
+	rrmdir($dir. $directoryMerged);
 }
-rcopy($dir . '/' . $directory30, $dir. '/MERGED');
+rcopy($dir . '/' . $directory30, $dir. '/' . $directoryMerged);
 
 foreach ($langs as $locale => $lang) {
 
@@ -272,7 +273,12 @@ function rrmdir(string $dir) {
 }
 
 function rcopy(string $source, string $dest) {
+	if (is_dir($dest)) {
+		rrmdir($dest);
+	}
+
 	mkdir($dest, 0755);
+
 	foreach (
 	 $iterator = new \RecursiveIteratorIterator(
 	  new \RecursiveDirectoryIterator($source, \RecursiveDirectoryIterator::SKIP_DOTS),
