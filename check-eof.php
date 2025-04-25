@@ -13,36 +13,31 @@
 
 // Stuff we will ignore.
 $ignoreFiles = [
-	'\./cache/',
-	'\./other/',
-	'\./tests/',
-	'\./vendor/',
-
-	// Minify Stuff.
-	'\./Sources/minify/',
-
-	// random_compat().
-	'\./Sources/random_compat/',
-
-	// ReCaptcha Stuff.
-	'\./Sources/ReCaptcha/',
+	'./cache/',
+	'./other/',
+	'./tests/',
+	'./vendor/',
+	'./.git',
+	'./Sources/minify/',
+	'./Sources/ReCaptcha/',
+	'./ZxcvbnPhp/',
 
 	// We will ignore Settings.php if this is a live dev site.
-	'\./Settings\.php',
-	'\./Settings_bak\.php',
-	'\./db_last_error\.php',
+	'./Settings.php',
+	'./Settings_bak.php',
+	'./db_last_error.php',
 ];
 
 try {
-	foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator('.', FilesystemIterator::UNIX_PATHS)) as $currentFile => $fileInfo) {
+	foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(realpath('.'), FilesystemIterator::UNIX_PATHS)) as $currentFile => $fileInfo) {
 		// Starts with a dot, skip.  Also gets Mac OS X resource files.
-		if ($currentFile[0] == '.') {
+		if (str_starts_with($fileInfo->getBasename(), '.')) {
 			continue;
 		}
 
 		if ($fileInfo->getExtension() == 'php') {
 			foreach ($ignoreFiles as $if) {
-				if (preg_match('~' . $if . '~i', $currentFile)) {
+				if (file_exists($if) && preg_match('~' . preg_quote(realpath($if), '~') . '~i', $currentFile)) {
 					continue 2;
 				}
 			}
@@ -52,32 +47,21 @@ try {
 				fseek($file, -100, SEEK_END);
 				$contents = fread($file, 100);
 
-				// There is some white space here.
-				if (preg_match('~\?>\s+$~', $contents, $matches)) {
-					throw new Exception('End of File contains extra spaces in ' . $currentFile);
+				// We don't want closing PHP tags in SMF 3.0+.
+				if (preg_match('~\s*\?>\s*$~', $contents, $matches)) {
+					throw new Exception('Closing PHP tag found in ' . $currentFile . '. Please remove it.');
 				}
 
-				// Test to see if its there even, SMF 2.1 base package needs it there in our main files to allow package manager to properly handle end operations.  Customizations do not need it.
-				if (!preg_match('~\?>$~', $contents, $matches)) {
-					throw new Exception('End of File missing in ' . $currentFile);
-				}
-
-				// Test to see if a function/class ending is here but with no return (because we are OCD).
-				if (preg_match('~}([\r]?\n)?\?>~', $contents, $matches)) {
-					throw new Exception('Incorrect return(s) after last function/class but before EOF in ' . $currentFile);
-				}
-
-				// Test to see if a string ending is here but with no return (because we are OCD).
-				if (preg_match('~;([\r]?\n)?\?>~', $contents, $matches)) {
-					throw new Exception('Incorrect return(s) after last string but before EOF in ' . $currentFile);
+				// Make sure we end with exactly one newline.
+				if (strlen($contents) > 0 && !preg_match('~\S\n$~', $contents, $matches)) {
+					throw new Exception('Incorrect number of newlines at EOF in ' . $currentFile);
 				}
 			} else {
 				throw new Exception('Unable to open file ' . $currentFile);
 			}
 		}
 	}
-}
-catch (Exception $e) {
-	fwrite(STDERR, $e->getMessage());
+} catch (Exception $e) {
+	fwrite(STDERR, $e->getMessage() . "\n");
 	exit(1);
 }
