@@ -13,36 +13,31 @@
 
 // Stuff we will ignore.
 $ignoreFiles = [
-	'\./cache/',
-	'\./other/',
-	'\./tests/',
-	'\./vendor/',
-
-	// Minify Stuff.
-	'\./Sources/minify/',
-
-	// random_compat().
-	'\./Sources/random_compat/',
-
-	// ReCaptcha Stuff.
-	'\./Sources/ReCaptcha/',
+	'./cache/',
+	'./other/',
+	'./tests/',
+	'./vendor/',
+	'./.git',
+	'./Sources/minify/',
+	'./Sources/ReCaptcha/',
+	'./ZxcvbnPhp/',
 
 	// We will ignore Settings.php if this is a live dev site.
-	'\./Settings\.php',
-	'\./Settings_bak\.php',
-	'\./db_last_error\.php',
+	'./Settings.php',
+	'./Settings_bak.php',
+	'./db_last_error.php',
 ];
 
 try {
-	foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator('.', FilesystemIterator::UNIX_PATHS)) as $currentFile => $fileInfo) {
+	foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(realpath('.'), FilesystemIterator::UNIX_PATHS)) as $currentFile => $fileInfo) {
 		// Starts with a dot, skip.  Also gets Mac OS X resource files.
-		if ($currentFile[0] == '.') {
+		if (str_starts_with($fileInfo->getBasename(), '.')) {
 			continue;
 		}
 
 		if ($fileInfo->getExtension() == 'php') {
 			foreach ($ignoreFiles as $if) {
-				if (preg_match('~' . $if . '~i', $currentFile)) {
+				if (file_exists($if) && preg_match('~' . preg_quote(realpath($if), '~') . '~i', $currentFile)) {
 					continue 2;
 				}
 			}
@@ -58,7 +53,7 @@ try {
 				}
 
 				// Make sure we end with exactly one newline.
-				if (!preg_match('~\S\n$~', $contents, $matches)) {
+				if (strlen($contents) > 0 && !preg_match('~\S\n$~', $contents, $matches)) {
 					throw new Exception('Incorrect number of newlines at EOF in ' . $currentFile);
 				}
 			} else {
@@ -66,8 +61,7 @@ try {
 			}
 		}
 	}
-}
-catch (Exception $e) {
-	fwrite(STDERR, $e->getMessage());
+} catch (Exception $e) {
+	fwrite(STDERR, $e->getMessage() . "\n");
 	exit(1);
 }
