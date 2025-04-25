@@ -52,24 +52,14 @@ try {
 				fseek($file, -100, SEEK_END);
 				$contents = fread($file, 100);
 
-				// There is some white space here.
-				if (preg_match('~\?>\s+$~', $contents, $matches)) {
-					throw new Exception('End of File contains extra spaces in ' . $currentFile);
+				// We don't want closing PHP tags in SMF 3.0+.
+				if (preg_match('~\s*\?>\s*$~', $contents, $matches)) {
+					throw new Exception('Closing PHP tag found in ' . $currentFile . '. Please remove it.');
 				}
 
-				// Test to see if its there even, SMF 2.1 base package needs it there in our main files to allow package manager to properly handle end operations.  Customizations do not need it.
-				if (!preg_match('~\?>$~', $contents, $matches)) {
-					throw new Exception('End of File missing in ' . $currentFile);
-				}
-
-				// Test to see if a function/class ending is here but with no return (because we are OCD).
-				if (preg_match('~}([\r]?\n)?\?>~', $contents, $matches)) {
-					throw new Exception('Incorrect return(s) after last function/class but before EOF in ' . $currentFile);
-				}
-
-				// Test to see if a string ending is here but with no return (because we are OCD).
-				if (preg_match('~;([\r]?\n)?\?>~', $contents, $matches)) {
-					throw new Exception('Incorrect return(s) after last string but before EOF in ' . $currentFile);
+				// Make sure we end with exactly one newline.
+				if (!preg_match('~\S\n$~', $contents, $matches)) {
+					throw new Exception('Incorrect number of newlines at EOF in ' . $currentFile);
 				}
 			} else {
 				throw new Exception('Unable to open file ' . $currentFile);
