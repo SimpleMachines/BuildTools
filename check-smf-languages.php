@@ -8,47 +8,33 @@
  * @copyright 2024 Simple Machines and individual contributors
  * @license https://www.simplemachines.org/about/smf/license.php BSD
  *
- * @version 3.0 Alpha 1
+ * @version 3.0 Alpha 3
  */
 
 // Stuff we will ignore.
 global $ignoreFiles, $currentVersion;
+
 $ignoreFiles = [
 	'index\.php',
 	'\.(?!php)[^.]*$',
 ];
 
 try {
-	if (($upgradeFile = fopen('./other/upgrade.php', 'r')) !== false) {
-		$upgradeContents = fread($upgradeFile, 1250);
-
-		// In production, only check index.english.php
-		if (!preg_match('~define\(\'SMF_VERSION\', \'([^\']+)\'\);~i', $upgradeContents, $versionResults)) {
-			throw new Exception('Error: Could not locate SMF_VERSION');
-		}
-		if (version_compare($versionResults[1], '2.1.0', '>')) {
-			$ignoreFiles[] = '^(?!index\.)';
-		}
-
-		// We need SMF_LANG_VERSION, obviously.
-		if (!preg_match('~define\(\'SMF_LANG_VERSION\', \'([^\']+)\'\);~i', $upgradeContents, $versionResults)) {
-			throw new Exception('Error: Could not locate SMF_LANG_VERSION');
-		}
-		$currentVersion = $versionResults[1];
-
-		if (!file_exists('./Languages')) {
-			checkLanguageDirectory('./Themes/default/languages', '~([A-Za-z]+)\.english\.php~i');
-		} else {
-			checkLanguageDirectory('./Languages/en_US', '~([A-Za-z]+)\.php~i');
-//			foreach (new DirectoryIterator('./Languages') as $dirInfo)
-//				if(!in_array($dirInfo->getFileName(), ['.', '..']) && is_dir($dirInfo->getPathname()))
-//					checkLanguageDirectory($dirInfo->getPathname());
-		}
-	} else {
-		throw new Exception('Unable to open file ./upgrade.php');
+	if (($indexFile = fopen('./index.php', 'r')) === false) {
+		throw new Exception('Unable to open file ./index.php');
 	}
-}
-catch (Exception $e) {
+
+	$indexContents = fread($indexFile, 1250);
+
+	if (!preg_match('~define\(\'SMF_VERSION\', \'([^\']+)\'\);~i', $indexContents, $versionResults)) {
+		throw new Exception('Error: Could not locate SMF_VERSION');
+	}
+
+	$currentVersion = $versionResults[1];
+	$ignoreFiles[] = '^(?!General\.)';
+
+	checkLanguageDirectory('./Languages/en_US', '~([A-Za-z]+)\.php~i');
+} catch (Exception $e) {
 	fwrite(STDERR, $e->getMessage());
 	exit(1);
 }
