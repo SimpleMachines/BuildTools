@@ -73,10 +73,12 @@ $ignoreFiles = [
 ];
 
 $ignoreSourceFiles = [
-	'~Maintenance/Cleanup/.*~i',
-	'~Maintenance/Migration/.*~i',
+	'~Db/Schema/(?!v' . strtr($expected_smf_version, '.', '_') . ')v\d+_\d+/.*~i',
+	'~Maintenance/Cleanup/(?!v' . strtr($expected_smf_version, '.', '_') . ')v\d+_\d+/.*~i',
+	'~Maintenance/Migration/(?!v' . strtr($expected_smf_version, '.', '_') . ')v\d+_\d+/.*~i',
 	'~minify/.*~i',
 	'~ReCaptcha/.*~i',
+	'~Tasks/.*~i',
 	'~Unicode/(?!Utf8String\.php).*~i',
 	'~ZxcvbnPhp/.*~i',
 ];
