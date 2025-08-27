@@ -85,7 +85,7 @@ $ignoreSourceFiles = [
 
 // Skipping languages?
 if (!isset($cliparams['include-languages'])) {
-	unset($buildFiles['Themes/default/languages/*.english.php']);
+	unset($buildFiles['Languages/en_US/*.php']);
 }
 
 // No file? Thats bad.
@@ -226,7 +226,7 @@ if (isset($cliparams['output']) && $cliparams['output'] == 'raw') {
 		if ($location === 'SMF') {
 			echo "window.smfVersions = {\n";
 		} elseif ($location === 'Languages') {
-			echo "};\n\nwindow.smfLanguageVersions = {\n";
+			echo "\n\nwindow.smfLanguageVersions = {\n";
 		}
 
 		$i = 0;
@@ -234,7 +234,7 @@ if (isset($cliparams['output']) && $cliparams['output'] == 'raw') {
 		foreach ($files as $file => $version) {
 			++$i;
 
-			$thislocation = $location === 'SMF' ? 'SMF' : ($location === 'Languages' ? str_replace('.english.php', '', $file) : $location . $file);
+			$thislocation = $location === 'SMF' ? 'SMF' : ($location === 'Languages' ? str_replace('.php', '', $file) : $location . $file);
 
 			if ($thislocation === 'SMF') {
 				$version = 'SMF ' . $version;
@@ -252,15 +252,7 @@ if (isset($cliparams['output']) && $cliparams['output'] == 'raw') {
 			echo "\n";
 		}
 
-		if (
-			$location === 'Languages'
-			|| (
-				!isset($cliparams['include-languages'])
-				&& $location === 'Template'
-			)
-		) {
-			continue;
-		}
+		echo "};";
 	}
 }
 
