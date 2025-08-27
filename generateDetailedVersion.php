@@ -259,7 +259,7 @@ if (isset($cliparams['output']) && $cliparams['output'] == 'raw') {
 				&& $location === 'Template'
 			)
 		) {
-			echo "};\n";
+			continue;
 		}
 	}
 }
