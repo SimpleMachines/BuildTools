@@ -226,7 +226,7 @@ if (isset($cliparams['output']) && $cliparams['output'] == 'raw') {
 		if ($location === 'SMF') {
 			echo "window.smfVersions = {\n";
 		} elseif ($location === 'Languages') {
-			echo "\n\nwindow.smfLanguageVersions = {\n";
+			echo "};\n\nwindow.smfLanguageVersions = {\n";
 		}
 
 		$i = 0;
@@ -251,9 +251,9 @@ if (isset($cliparams['output']) && $cliparams['output'] == 'raw') {
 			// Add the return.
 			echo "\n";
 		}
-
-		echo "};";
 	}
+
+	echo "};";
 }
 
 function prepareCLIhandler()
