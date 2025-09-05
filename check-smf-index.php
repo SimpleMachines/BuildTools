@@ -21,8 +21,8 @@ $contents = <<<END
 <?php
 
 // Try to handle it with the upper level index.php. (it should know what to do.)
-if (file_exists(dirname(__DIR__) . '/index.php')) {
-	include dirname(__DIR__) . '/index.php';
+if (file_exists(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'index.php')) {
+	include dirname(__DIR__) . DIRECTORY_SEPARATOR . 'index.php';
 } else {
 	exit;
 }
@@ -51,7 +51,7 @@ try
 			throw new Exception('Index file missing in ' . $currentDirectory);
 		}
 
-		if (file_get_contents($currentDirectory . '/index.php') != $contents) {
+		if (!\in_array(file_get_contents($path . '/index.php'), [$contents, str_replace('DIRECTORY_SEPARATOR . \'index.php\'', '\'/index.php\'', $contents)])) {
 			throw new Exception('Index content does not match in ' . $currentDirectory);
 		}
 	}
