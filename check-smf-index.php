@@ -51,7 +51,7 @@ try
 			throw new Exception('Index file missing in ' . $currentDirectory);
 		}
 
-		if (!\in_array(file_get_contents($path . '/index.php'), [$contents, str_replace('DIRECTORY_SEPARATOR . \'index.php\'', '\'/index.php\'', $contents)])) {
+		if (!\in_array(file_get_contents($currentDirectory . '/index.php'), [$contents, str_replace('DIRECTORY_SEPARATOR . \'index.php\'', '\'/index.php\'', $contents)])) {
 			throw new Exception('Index content does not match in ' . $currentDirectory);
 		}
 	}
