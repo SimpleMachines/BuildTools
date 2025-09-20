@@ -71,10 +71,41 @@ class buildPatch
 	protected static bool $debug = false;
 
 	/**
+	 * Should we verify the destination tag exists?
+	 *
+	 * @var bool
+	 */
+	protected static bool $no_verification = false;
+
+	/**
 	 * What type of patching we are doing.  Either xml or diff
 	 * @var
 	 */
 	protected static ?string $patch_type = null;
+
+	/**
+	 * Archive Options
+	 * Yes = Build normal
+	 * System = Use System binaries to build
+	 * No = Do not build.
+	 *
+	 * @var string|null
+	 */
+	protected static string $archive_mode = 'yes';
+
+	/**
+	 * SMF Version we are coming from.
+	 *
+	 * @var string
+	 */
+	protected static string $from_smf_version = '';
+
+	/**
+	 * SMF Version we are going to.
+	 *
+	 * @var string
+	 */
+	protected static string $to_smf_version = '';
 
 	/**
 	 * A list of archives we will build.
@@ -103,6 +134,25 @@ class buildPatch
 		'd' => 'debug',
 		'help' => 'help',
 		'debug' => 'debug',
+		'skip-verify' => 'no_verification',
+		'name' => 'to_smf_version',
+		'archive' => 'archive_mode',
+	];
+
+	/**
+	 * List of operations we perform to normalize the file name.
+	 * Other directory is built and filtered later as the logic is easier to exclude after we have processed it.
+	 *
+	 * @var array
+	 */
+	protected static array $replacements = [
+		'~^/Themes/default/scripts~i' => '$theme' . 'dir/scripts',
+		'~^/Themes/default/images~i' => '$images' . 'dir',
+		'~^/Themes/default/languages~i' => '$language' . 'dir',
+		'~^/Themes/default~i' => '$theme' . 'dir',
+		'~^/Sources~i' => '$source' . 'dir',
+		'~^/other~i' => '$board' . 'dir/other',
+		'~^/~i' => '$board' . 'dir/',
 	];
 
 	/***********************
@@ -148,34 +198,37 @@ class buildPatch
 		if (!preg_match('/(\d+)\.(\d+)\.(\d+)/i', $version[1])) {
 			throw new Exception('Error: Version is not stable in ' . self::$from_tag);
 		}
-		$from_smf_version = $version[1];
+		self::$from_smf_version = $version[1];
 
 		// Setting up our to version
-		$to_tag_exists = trim(shell_exec('if [ $(git tag -l ' . escapeshellarg(self::$to_tag) . ') ]; then echo "true"; else echo ""; fi') ?? '');
+		$to_tag_exists = self::$no_verification ? true : trim(shell_exec('if [ $(git tag -l ' . escapeshellarg(self::$to_tag) . ') ]; then echo "true"; else echo ""; fi') ?? '');
 
-		if (empty($from_tag_exists)) {
+		if (empty($to_tag_exists)) {
 			throw new Exception('Unable to tag for ' . self::$to_tag);
 		}
+
 		// Get the version information.
-		$to_index = trim(shell_exec('git show ' . escapeshellarg(self::$to_tag . ':index.php')) ?? '');
+		if (empty(self::$to_smf_version)) {
+			$to_index = trim(shell_exec('git show ' . escapeshellarg(self::$to_tag . ':index.php')) ?? '');
 
-		// Validation of from version.
-		if (!preg_match('/define\(\'SMF_VERSION\', \'([^\']+)\'\);/i', $to_index, $version)) {
-			throw new Exception('Error: Could not locate SMF_VERSION in ' . self::$to_tag);
-		}
+			// Validation of from version.
+			if (!preg_match('/define\(\'SMF_VERSION\', \'([^\']+)\'\);/i', $to_index, $version)) {
+				throw new Exception('Error: Could not locate SMF_VERSION in ' . self::$to_tag);
+			}
 
-		if (!preg_match('/(\d+)\.(\d+)\.(\d+)/i', $version[1])) {
-			throw new Exception('Error: Version is not stable in ' . self::$to_tag);
+			if (!preg_match('/(\d+)\.(\d+)\.(\d+)/i', $version[1])) {
+				throw new Exception('Error: Version is not stable in ' . self::$to_tag);
+			}
+			self::$to_smf_version = $version[1];
 		}
-		$to_smf_version = $version[1];
 
 		// Additional variables we need.
-		$to_file_prefix = self::getFileNamePrefix($to_smf_version);
+		$to_file_prefix = self::getFileNamePrefix(self::$to_smf_version);
 		$to_php_version = self::getPhpMinimumVersion(self::$to_tag);
 
 		// Ensure we have a sane patch type.
 		if (self::$patch_type === null || !in_array(self::$patch_type, ['xml', 'diff'])) {
-			self::$patch_type = version_compare($to_smf_version, '3.0.0-alpha1', '<') ? 'xml' : 'diff';
+			self::$patch_type = version_compare(self::$to_smf_version, '3.0.0-alpha1', '<') ? 'xml' : 'diff';
 		}
 
 		self::writeDebug('[patch] Creating working folder');
@@ -199,15 +252,15 @@ class buildPatch
 		// Running something below 3.0
 		if (self::$patch_type === 'xml') {
 			self::writeDebug('[patch] Converting to xml');
-			self::convertDiffToPatch($tmp_dir . $to_file_prefix . 'patch.diff', $to_smf_version, $tmp_dir, $to_file_prefix, $info_operations);
+			self::convertDiffToPatch($tmp_dir . $to_file_prefix . 'patch.diff', self::$to_smf_version, $tmp_dir, $to_file_prefix, $info_operations);
 
 			self::writeDebug(msg: '[patch] Cleaning up diff');
 			unlink($tmp_dir . $to_file_prefix . 'patch.diff');
 		}
 
-		//template for our package info file.
+		// Template for our package info file.
 		self::writeDebug('[patch] Building info file');
-		$infoFileContents = self::packageInfoTemplate($to_smf_version, $to_file_prefix, $from_smf_version, $to_php_version, self::$patch_type, $info_operations);
+		$infoFileContents = self::packageInfoTemplate(self::$to_smf_version, $to_file_prefix, self::$from_smf_version, $to_php_version, self::$patch_type, $info_operations);
 
 		self::writeDebug(msg: '[patch] Writing info file');
 		file_put_contents($tmp_dir . 'package-info.xml', $infoFileContents);
@@ -221,45 +274,19 @@ class buildPatch
 		$tmp_file = self::$output_dir . '/' . $to_file_prefix;
 		$build = 'patch';
 
+		if (strtolower(self::$archive_mode) === 'no') {
+			self::writeDebug('[patch] Not building archive');
+
+			exit;
+		}
+
 		// Ensure we run a clean setup for the build.
 		@array_map('unlink', glob($tmp_file . $build . '.*'));
 
-		foreach (self::$archives as $a) {
-			$extension = $a[0] === Phar::ZIP ? 'zip' : ($a[1] === Phar::GZ ? 'tar.gz' : 'tar.bz2');
-
-			self::writeDebug("[patch] [{$extension}] Creating empty archive");
-
-			$pd = new PharData(
-				$tmp_file . $build . '.tmp',
-				FilesystemIterator::SKIP_DOTS | FilesystemIterator::UNIX_PATHS,
-				null,
-				$a[0],
-			);
-
-			// Quickly now, use a iterator to build the main archive.
-			self::writeDebug("[{$build}] [{$extension}] Adding initial files");
-			$pd->buildFromIterator(new GlobIterator(pattern: $tmp_dir . DIRECTORY_SEPARATOR . '*'), $tmp_dir . DIRECTORY_SEPARATOR);
-
-			// Convert the archive into the proper archive and compression.
-			self::writeDebug("[{$build}] [{$extension}] Writing file");
-			$pd->convertToData($a[0], $a[1], $extension);
-
-			// Zip needs to be compressed with DEFLATE, which phar doesn't do.
-			if ($a[0] === Phar::ZIP) {
-				self::writeDebug("[{$build}] [{$extension}] Compressing");
-				$zip = new ZipArchive();
-				$zip->open($tmp_file . $build . '.' . $extension);
-
-				for ($i = 0; $i < $zip->numFiles; $i++) {
-					$zip->setCompressionIndex($i, ZipArchive::CM_DEFLATE);
-				}
-				$zip->close();
-			}
-
-			// Tar files leave behind the .tmp file.
-			if ($a[0] === Phar::TAR) {
-				@unlink($tmp_file . $build . '.tmp');
-			}
+		if (strtolower(self::$archive_mode) === 'system') {
+			self::archiveUsingSystemTools($tmp_file, $tmp_dir, $build);
+		} else {
+			self::archiveWithPhar($tmp_file, $tmp_dir, $build);
 		}
 
 		// Cleanup.
@@ -285,9 +312,14 @@ class buildPatch
 		foreach ($params as $param) {
 			if (strpos($param, '=') !== false) {
 				list($var, $val) = explode('=', $param);
+
+				if (!isset(self::$cli_param_map[ltrim($var, '-')])) {
+					continue;
+				}
+
 				self::${self::$cli_param_map[ltrim($var, '-')]} = $val;
-			} else {
-			self::${self::$cli_param_map[ltrim($param, '-')]} = true;
+			} elseif (isset(self::$cli_param_map[ltrim($param, '-')])) {
+				self::${self::$cli_param_map[ltrim($param, '-')]} = true;
 			}
 		}
 
@@ -295,13 +327,17 @@ class buildPatch
 		if (empty($params) || self::$help) {
 			echo 'SMF Build Release Tool' . "\n"
 				. '$ php ' . basename(__FILE__) . " -s=path/to/smf/ -o=/tmp -f=3.0.1 -t=3.0.2  \n"
-				. '--s=/path/to/smf     Where SMF has its files' . "\n"
-				. '--o=/path/to/out     Where to store the generated files' . "\n"
-				. '--f=tag_id        	Tag in git for our source version.' . "\n"
-				. '--t=tag_id        	Tag in git for our target version.' . "\n"
+				. '-s=/path/to/smf     Where SMF has its files' . "\n"
+				. '-o=/path/to/out     Where to store the generated files' . "\n"
+				. '-f=tag_id        	Tag in git for our source version.' . "\n"
+				. '-t=tag_id        	Tag in git for our target version.' . "\n"
 				. '-p=xml               The of patch file (xml or diff)' . "\n"
+				. '--skip-verify        Skips verification of destination tag.' . "\n"
+				. '--name=VERSION       Provides an alternative name for the destination version.' . "\n"
+				. '--archive=yes        Archive building. Yes (default): build using PHP Phar; No: Do not build; System: Build using the operation system tools' . "\n"
 				. '-h, --help           This help file.' . "\n"
 				. '-d, --debug          Prints out more debug info.' . "\n"
+
 				. "\n";
 
 			die;
@@ -371,7 +407,7 @@ class buildPatch
 			<package-info xmlns="http://www.simplemachines.org/xml/package-info" xmlns:smf="http://www.simplemachines.org/">
 				<id>smf:smf-{$version}</id>
 				<name>SMF {$version} Update</name>
-				<version>{$version}</version>
+				<version>1.0</version>
 				<type>modification</type>
 
 				<install for="{$previous_version}">
@@ -473,29 +509,19 @@ class buildPatch
 		// First walk each line to figure out what we are doing.
 		for ($i = 0; $i < count($content); $i++) {
 			if (str_starts_with($content[$i], '--- a/')) {
-				$directory = substr($content[$i], 6, strpos($content[$i], '/', 7) - 6);
+				$file = preg_replace(
+					array_keys(self::$replacements),
+					array_values(self::$replacements),
+					trim(substr($content[$i], 5)),
+				);
 
-				if ($directory == 'Sources') {
-					$dir = '$source' . 'dir';
-				} elseif (strpos($content[$i], 'languages') !== false) {
-					$dir = '$language' . 'dir';
-				} elseif (strpos($content[$i], 'images') !== false) {
-					$dir = '$images' . 'dir';
-				} elseif (strpos($content[$i], 'default/scripts') !== false) {
-					$dir = '$theme' . 'dir/scripts';
-				} elseif ($directory == 'Themes') {
-					$dir = '$theme' . 'dir';
-				} else {
-				$dir = '$board' . 'dir';
-				}
-
-				$operations[$counter]['path'] = $dir . '/' . basename($content[$i]);
+				$operations[$counter]['path'] = $file; //$dir . '/' . trim($content[$i]);
 
 				// Is this a file deletion?
 				if (str_starts_with($content[$i + 1], '+++ /dev/null')) {
 					$file_operations['replace'] = [''];
-					$infoOperation = basename(trim($content[$i]));
-					$info_operations['remove-file'][] = $dir . '/' . $infoOperation;
+					$infoOperation = basename($file);
+					$info_operations['remove-file'][] = $file; //$dir . '/' . $infoOperation;
 				}
 
 				while (!str_starts_with($content[$i], '@@')) {
@@ -536,7 +562,7 @@ class buildPatch
 					$opCounter++;
 
 					if (str_starts_with($content[$i], 'diff --git')) {
-						$dir = '';
+						$file = '';
 						$counter++;
 					}
 				}
@@ -545,7 +571,7 @@ class buildPatch
 				continue;
 			}
 
-			if (!empty($dir)) {
+			if (!empty($file)) {
 				if (str_starts_with($content[$i], ' ')) {
 					$file_operations['replace'][] = $file_operations['search'][] = substr($content[$i], 1);
 				}
@@ -564,11 +590,16 @@ class buildPatch
 <modification xmlns="http://www.simplemachines.org/xml/modification" xmlns:smf="http://www.simplemachines.org/">
 
 	<id>smf:' . $version . '</id>
-	<version>' . $version . '</version>';
+	<version>1.0</version>';
 
 		foreach ($operations as $file) {
+			if (str_starts_with($file['path'], '$board' . 'dir/other')) {
+				continue;
+			}
+
 			$ret .= '
-	<file name="' . $file['path'] . '">';
+	<!-- ' . $version . ' updates for ' . basename($file['path']) . ' -->
+	<file name="' . $file['path'] . '"' . (str_starts_with($file['path'], '$language' . 'dir/') ? ' error="ignore"' : '') . '>';
 
 			foreach ($file['operations'] as $file_operations) {
 				$ret .= '
@@ -758,5 +789,108 @@ define\(\'SMF_FULL_VERSION\', \'SMF \' . SMF_VERSION\);
 		$contents = preg_replace('~(<search position="before"><!\[CDATA\[)((?:\X(?!\]\]>))*)\n(\]\]></search>\s+<add><!\[CDATA\[)((?:\X(?!\]\]>))*)\n(\]\]></add>)~', '$1' . "\n" . '$2$3' . "\n" . '$4$5', $contents);
 
 		file_put_contents($output_file, $contents);
+	}
+
+	/**
+	 * Build the archive using PHP's PHAR.
+	 *
+	 * @param string $tmp_file Prefix of filename we are building
+	 * @param string $tmp_dir Directory containing the files we are archiving
+	 * @param string $build Name of the build
+	 */
+	protected static function archiveWithPhar(string $tmp_file, string $tmp_dir, string $build): void
+	{
+		foreach (self::$archives as $a) {
+			$extension = $a[0] === Phar::ZIP ? 'zip' : ($a[1] === Phar::GZ ? 'tar.gz' : 'tar.bz2');
+
+			self::writeDebug("[patch] [{$extension}] Creating empty archive");
+
+			$pd = new PharData(
+				$tmp_file . $build . '.tmp',
+				FilesystemIterator::SKIP_DOTS | FilesystemIterator::UNIX_PATHS,
+				null,
+				$a[0],
+			);
+
+			// Quickly now, use a iterator to build the main archive.
+			self::writeDebug("[{$build}] [{$extension}] Adding initial files");
+			$pd->buildFromIterator(new GlobIterator(pattern: $tmp_dir . DIRECTORY_SEPARATOR . '*'), $tmp_dir . DIRECTORY_SEPARATOR);
+
+			// Convert the archive into the proper archive and compression.
+			self::writeDebug("[{$build}] [{$extension}] Writing file");
+			$pd->convertToData($a[0], $a[1], $extension);
+
+			// Zip needs to be compressed with DEFLATE, which phar doesn't do.
+			if ($a[0] === Phar::ZIP) {
+				self::writeDebug("[{$build}] [{$extension}] Compressing");
+				$zip = new ZipArchive();
+				$zip->open($tmp_file . $build . '.' . $extension);
+
+				for ($i = 0; $i < $zip->numFiles; $i++) {
+					$zip->setCompressionIndex($i, ZipArchive::CM_DEFLATE);
+				}
+				$zip->close();
+			}
+
+			// Tar files leave behind the .tmp file.
+			if ($a[0] === Phar::TAR) {
+				@unlink($tmp_file . $build . '.tmp');
+			}
+		}
+	}
+
+	protected static function archiveUsingSystemTools(string $tmp_file, string $tmp_dir, string $build): void
+	{
+		$current_directory = getcwd();
+
+		// Try to locate the tar binaries.
+		$tar_paths = ['/usr/bin/tar', '/bin/tar'];
+		$tar_path = array_filter($tar_paths, fn($bin) => file_exists($bin))[0] ?? null;
+
+		if ($tar_path === null) {
+			throw new Exception('Unable to locate the tar binary');
+		}
+
+		// Try to locate the zip binaries.
+		$zip_paths = ['/usr/bin/zip', '/bin/zip'];
+		$zip_path = array_filter($zip_paths, fn($bin) => file_exists($bin))[0] ?? null;
+
+		if ($zip_path === null) {
+			throw new Exception('Unable to locate the zip binary');
+		}
+
+		// Tar needs some extra args.
+		$tar_args = [
+			'--no-xattrs',
+			'--no-acls',
+			'--exclude=\'.*\'',
+		];
+
+		// Mac resource files and other garbage.
+		if (PHP_OS_FAMILY === 'Darwin') {
+			$tar_args[] = '--no-mac-metadata';
+			$tar_args[] = '--no-fflags';
+		}
+
+		// Enter the working directory.
+		chdir($tmp_dir);
+
+		foreach (self::$archives as $a) {
+			$extension = $a[0] === Phar::ZIP ? 'zip' : ($a[1] === Phar::GZ ? 'tar.gz' : 'tar.bz2');
+			self::writeDebug("[patch] [{$extension}] Building");
+
+			if ($a[0] === Phar::ZIP) {
+				shell_exec($zip_path . ' -x ".*/" -1 ' . $tmp_file . $build . '.zip -r *');
+			} elseif ($a[0] === Phar::TAR && $a[1] === Phar::GZ) {
+				shell_exec($tar_path . ' ' . implode(' ', $tar_args) . ' -czf ' . $tmp_file . $build . '.tar.gz *');
+			} elseif ($a[0] === Phar::TAR && $a[1] === Phar::BZ2) {
+				shell_exec($tar_path . ' ' . implode(' ', $tar_args) . ' -cjf ' . $tmp_file . $build . '.tar.bz *');
+			} else {
+				throw new Exception('Unknown compression method');
+			}
+		}
+
+		// Return to where we started.
+		chdir($current_directory);
 	}
 }
