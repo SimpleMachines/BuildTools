@@ -142,12 +142,15 @@ class updateHeaders
         $files[] = 'SSI.php';
         $files[] = 'proxy.php';
         $files[] = 'cron.php';
+        $files[] = 'other/upgrade-helper.php';
+        $files[] = 'other/upgrade.php';
+        $files[] = 'other/install.php';
 
         // Get the current year.
         $current_year = date('Y', time());
 
         foreach ($files as $file) {
-            if (empty($file) || !file_exists($file) || str_starts_with($file, 'other/')) {
+            if (empty($file) || !file_exists($file)) {
                 continue;
             }
 
@@ -164,7 +167,7 @@ class updateHeaders
                 $replacements = [
                     '~(\r?\n\s*)\/\/ Version: \d\.\d(?:\.\d)?;~' => '\1// Version: ' . self::$to_smf_version . ';'
                 ];
-            } else if (in_array($file, ['index.php', 'cron.php', 'proxy.php', 'SSI.php'])) {
+            } else if (in_array($file, ['index.php', 'cron.php', 'proxy.php', 'SSI.php']) || str_starts_with($file, 'other/')) {
                 $length = 4000;
 
                 $replacements = [
