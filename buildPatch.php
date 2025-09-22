@@ -648,6 +648,11 @@ class buildPatch
 		// Trim up the end matching lines.
 		// When counting backwards, we want to count down from the highest index on each array.
 		for ($i = 0; $i < $counter && isset($op['search'][$searchLines - $i], $op['replace'][$findLines - $i]); $i++) {
+			// We can't trim to much.
+			if (count($op['search']) < 3 || count($op['replace']) < 3) {
+				break;
+			}
+
 			if ($op['search'][$searchLines - $i] === $op['replace'][$findLines - $i]) {
 				unset($op['search'][$searchLines - $i], $op['replace'][$findLines - $i]);
 			} else {
@@ -657,6 +662,11 @@ class buildPatch
 
 		// Trim up the starting matching lines.
 		for ($i = 0; $i < $counter && isset($op['search'][$i], $op['replace'][$i]); $i++) {
+			// We can't trim to much.
+			if (count($op['search']) < 3 || count($op['replace']) < 3) {
+				break;
+			}
+
 			if ($op['search'][$i] === $op['replace'][$i]) {
 				unset($op['search'][$i], $op['replace'][$i]);
 			} else {
