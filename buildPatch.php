@@ -515,16 +515,24 @@ class buildPatch
 					trim(substr($content[$i], 5)),
 				);
 
-				$operations[$counter]['path'] = $file; //$dir . '/' . trim($content[$i]);
+				// We only really care about php, js and css files.
+				if (!str_ends_with($file, '.php') && !str_ends_with($file, '.js') && !str_ends_with($file, '.css')) {
+					while (!str_starts_with($content[$i + 1], '--- a/')) {
+						$i++;
+					}
+					continue;
+				}
+
+				$operations[$counter]['path'] = $file;
 
 				// Is this a file deletion?
 				if (str_starts_with($content[$i + 1], '+++ /dev/null')) {
 					$file_operations['replace'] = [''];
 					$infoOperation = basename($file);
-					$info_operations['remove-file'][] = $file; //$dir . '/' . $infoOperation;
+					$info_operations['remove-file'][] = $file;
 				}
 
-				while (!str_starts_with($content[$i], '@@')) {
+				while (!str_starts_with($content[$i + 1], '@@')) {
 					$i++;
 				}
 				continue;
@@ -556,6 +564,8 @@ class buildPatch
 					unset($operations[$counter]);
 					$infoOperation = null;
 				} else {
+					self::trimOperation($file_operations);
+
 					$operations[$counter]['operations'][$opCounter]['search'] = str_replace(['<![CDATA[', ']]>'], ['<![CDA\' . \'TA[', ']\' . \']>'], implode('', $file_operations['search']));
 					$operations[$counter]['operations'][$opCounter]['replace'] = str_replace(['<![CDATA[', ']]>'], ['<![CDA\' . \'TA[', ']\' . \']>'], implode('', $file_operations['replace']));
 
@@ -620,6 +630,39 @@ class buildPatch
 
 		self::writeDebug('[patch] Writing patch.xml');
 		file_put_contents($working_dir . DIRECTORY_SEPARATOR . $to_file_prefix . 'patch.xml', $ret);
+	}
+
+	/**
+	 * Attempts to trim our operation down a bit by removing some extra lines added from the diff conversion process.
+	 * 
+	 * @param array $op
+	 * @return void
+	 */
+	protected static function trimOperation(array &$op): void
+	{
+		// We start at index 0, like any sane language.
+		$searchLines = count($op['search']) - 1;
+		$findLines = count($op['replace']) - 1;
+		$counter = $searchLines > $findLines ? $searchLines : $findLines;
+
+		// Trim up the end matching lines.
+		// When counting backwards, we want to count down from the highest index on each array.
+		for ($i = 0; $i < $counter && isset($op['search'][$searchLines - $i], $op['replace'][$findLines - $i]); $i++) {
+			if ($op['search'][$searchLines - $i] === $op['replace'][$findLines - $i]) {
+				unset($op['search'][$searchLines - $i], $op['replace'][$findLines - $i]);
+			} else {
+				break;
+			}
+		}
+
+		// Trim up the starting matching lines.
+		for ($i = 0; $i < $counter && isset($op['search'][$i], $op['replace'][$i]); $i++) {
+			if ($op['search'][$i] === $op['replace'][$i]) {
+				unset($op['search'][$i], $op['replace'][$i]);
+			} else {
+				break;
+			}
+		}
 	}
 
 	/**
@@ -698,6 +741,7 @@ class buildPatch
 		$contents = file_get_contents($output_file);
 
 		// Be more precise with changes to license blocks.
+		// Takes a change to the copyright year and version, then breaks it into 2 operations.
 		$contents = preg_replace(
 			'~		<operation>
 			<search position="replace"><!\[CDATA\[( \* @copyright \d{4} Simple Machines and individual contributors)
@@ -723,6 +767,7 @@ class buildPatch
 		);
 
 		// Additional version fixing.
+		// Takes the change for the SMF version and software year defines and breaks into 2 operations.
 		$contents = preg_replace(
 			'~		<operation>
 			<search position="replace"><!\[CDATA\[(define\(\'SMF_VERSION\', \'\d\.\d\.\d\'\);)
@@ -746,17 +791,19 @@ define\(\'SMF_FULL_VERSION\', \'SMF \' . SMF_VERSION\);
 		);
 
 		// Would you guess we are doing more cleaning of the version updates?
+		// Takes a version header and define updates and breaks it up into 4 operations.
+		ini_set('pcre.backtrack_limit', 10000000);
 		$contents = preg_replace(
 			'~		<operation>
 			<search position="replace"><!\[CDATA\[( \* @copyright \d{4} Simple Machines and individual contributors)
- \* @license https://www\.simplemachines\.org/about/smf/license\.php BSD
+ \* @license https:\/\/www\.simplemachines\.org\/about\/smf\/license\.php BSD
  \*
 ( \* @version \d\.\d\.\d)
 (\X*?)(define\(\'SMF_VERSION\', \'\d\.\d\.\d\'\);)
 (\X*?)(define\(\'SMF_SOFTWARE_YEAR\', \'\d{4}\'\);)
 \]\]></search>
 			<add><!\[CDATA\[( \* @copyright \d{4} Simple Machines and individual contributors)
- \* @license https://www\.simplemachines\.org/about/smf/license\.php BSD
+ \* @license https:\/\/www\.simplemachines\.org\/about\/smf\/license\.php BSD
  \*
 ( \* @version \d\.\d\.\d)
 \3(define\(\'SMF_VERSION\', \'\d\.\d\.\d\'\);)
@@ -779,7 +826,7 @@ define\(\'SMF_FULL_VERSION\', \'SMF \' . SMF_VERSION\);
 			<search position="replace"><![CDATA[$6]]></search>
 			<add><![CDATA[$10]]></add>
 		</operation>',
-			$contents,
+			$contents
 		);
 
 		// Get rid of useless ending newlines in replace statements.
