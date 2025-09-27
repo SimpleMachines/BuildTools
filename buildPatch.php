@@ -253,9 +253,17 @@ class buildPatch
 		if (self::$patch_type === 'xml') {
 			self::writeDebug('[patch] Converting to xml');
 			self::convertDiffToPatch($tmp_dir . $to_file_prefix . 'patch.diff', self::$to_smf_version, $tmp_dir, $to_file_prefix, $info_operations);
+			
+			if (strtolower(self::$archive_mode) !== 'no' || !self::$debug) {
+				self::writeDebug(msg: '[patch] Cleaning up diff');
+				unlink($tmp_dir . $to_file_prefix . 'patch.diff');
+			}
 
-			self::writeDebug(msg: '[patch] Cleaning up diff');
-			unlink($tmp_dir . $to_file_prefix . 'patch.diff');
+			// Sort the output so its more organized.
+			self::sortPatchFile($tmp_dir . $to_file_prefix . 'patch.xml');
+
+			// Apply some qualify of life fixes.
+			self::cleanupPatchFile($tmp_dir . $to_file_prefix . 'patch.xml');
 		}
 
 		// Template for our package info file.
@@ -264,12 +272,6 @@ class buildPatch
 
 		self::writeDebug(msg: '[patch] Writing info file');
 		file_put_contents($tmp_dir . 'package-info.xml', $infoFileContents);
-
-		// Sort the output so its more organized.
-		self::sortPatchFile($tmp_dir . $to_file_prefix . 'patch.xml');
-
-		// Apply some qualify of life fixes.
-		self::cleanupPatchFile($tmp_dir . $to_file_prefix . 'patch.xml');
 
 		$tmp_file = self::$output_dir . '/' . $to_file_prefix;
 		$build = 'patch';
@@ -434,7 +436,7 @@ class buildPatch
 				</install>
 				<uninstall for="{$version}">
 					<readme type="inline" parsebbc="true">This will remove the changes introduced by SMF {$version}. [b]This is generally not a good idea.[/b]</readme>
-					<modification format="diff" reverse="true">{$file_version}patch.diff</modification>
+					<modification format="{$extension}" reverse="true">{$file_version}patch.{$extension}</modification>
 					<code type="inline"><![CDATA[<?php updateSettings(array('smfVersion' => '{$previous_version}'));]]></code>
 			END;
 
@@ -504,26 +506,23 @@ class buildPatch
 		$operations = [];
 		$counter = 0;
 		$opCounter = 0;
+		$lineStart = 0;
+		$removes = 0;
 		$infoOperation = null;
 
 		// First walk each line to figure out what we are doing.
 		for ($i = 0; $i < count($content); $i++) {
+			// Trigger a new file operation.
 			if (str_starts_with($content[$i], '--- a/')) {
+				$rawFile = trim(substr($content[$i], 5));
 				$file = preg_replace(
 					array_keys(self::$replacements),
 					array_values(self::$replacements),
-					trim(substr($content[$i], 5)),
+					$rawFile,
 				);
 
-				// We only really care about php, js and css files.
-				if (!str_ends_with($file, '.php') && !str_ends_with($file, '.js') && !str_ends_with($file, '.css')) {
-					while (!str_starts_with($content[$i + 1], '--- a/')) {
-						$i++;
-					}
-					continue;
-				}
-
 				$operations[$counter]['path'] = $file;
+				$operations[$counter]['file'] = $rawFile;
 
 				// Is this a file deletion?
 				if (str_starts_with($content[$i + 1], '+++ /dev/null')) {
@@ -538,7 +537,6 @@ class buildPatch
 				continue;
 			}
 
-			// Appearing to start a new section, tie things off.
 			/*
 			 * When we end a block of code, tie it off and add it as a operation
 			 * We do this when we detect:
@@ -550,12 +548,15 @@ class buildPatch
 			 * @copyright 2012 emanuele, Simple Machines
 			 * @license http://www.simplemachines.org/about/smf/license.php BSD
 			 */
+
+			// Appearing to start a new section, tie things off.
 			if (
 				(
 					str_starts_with($content[$i], '@@')
-				|| str_starts_with($content[$i], 'diff --git')
-				|| !isset($content[$i + 1])
-				) && !empty($file_operations)) {
+					|| str_starts_with($content[$i], 'diff --git')
+					|| !isset($content[$i + 1])
+				) && !empty($file_operations)
+			) {
 				// If this was a special info operation, don't do this.
 				if ($infoOperation !== null) {
 					self::writeDebug("[patch] Writing file {$infoOperation}");
@@ -564,12 +565,20 @@ class buildPatch
 					unset($operations[$counter]);
 					$infoOperation = null;
 				} else {
-					self::trimOperation($file_operations);
-
 					$operations[$counter]['operations'][$opCounter]['search'] = str_replace(['<![CDATA[', ']]>'], ['<![CDA\' . \'TA[', ']\' . \']>'], implode('', $file_operations['search']));
 					$operations[$counter]['operations'][$opCounter]['replace'] = str_replace(['<![CDATA[', ']]>'], ['<![CDA\' . \'TA[', ']\' . \']>'], implode('', $file_operations['replace']));
+					$operations[$counter]['operations'][$opCounter]['action'] = 'replace';
+					$operations[$counter]['operations'][$opCounter]['lineStart'] = $lineStart;
+					$operations[$counter]['operations'][$opCounter]['removes'] = $removes;
 
 					$opCounter++;
+
+					// Get information about where the change is going.
+					if (str_starts_with($content[$i], '@@')){
+						preg_match('/@@ -(\d{1,10}),{0,1}(\d{0,10}) \+\d{1,10},{0,1}\d{0,10} @@/', $content[$i], $matches);
+						$lineStart = $matches[1] ?? 0;
+						$removes = $matches[2] ?? 0;
+					}
 
 					if (str_starts_with($content[$i], 'diff --git')) {
 						$file = '';
@@ -579,6 +588,13 @@ class buildPatch
 
 				$file_operations = [];
 				continue;
+			}
+
+			// Get information about where the change is going.
+			if (str_starts_with($content[$i], '@@')){
+				preg_match('/@@ -(\d{1,10}),{0,1}(\d{0,10}) \+\d{1,10},{0,1}\d{0,10} @@/', $content[$i], $matches);
+				$lineStart = $matches[1] ?? 0;
+				$removes = $matches[2] ?? 0;
 			}
 
 			if (!empty($file)) {
@@ -603,7 +619,8 @@ class buildPatch
 	<version>1.0</version>';
 
 		foreach ($operations as $file) {
-			if (str_starts_with($file['path'], '$board' . 'dir/other')) {
+			// We only really care about php, js and css files.
+			if (str_starts_with($file['path'], '$board' . 'dir/other') || !in_array(pathinfo($file['path'], PATHINFO_EXTENSION), ['php', 'css', 'js'])) {
 				continue;
 			}
 
@@ -633,44 +650,187 @@ class buildPatch
 	}
 
 	/**
+	 * Optimize operations on a single file.
+	 *
+	 * @param array $ops
+	 * @return void
+	 */
+	protected static function performOptimizations(array &$fileOp): void {
+		$oldFileContents = shell_exec('git show ' . self::$from_tag . ':' . ltrim($fileOp['file'], '/'));
+		if (empty($oldFileContents)) {
+			return;
+		}
+
+		$newFileContents = shell_exec('git show ' . self::$to_tag . ':' . ltrim($fileOp['file'], '/'));
+		if (empty($newFileContents)) {
+			return;
+		}
+
+		array_walk($fileOp['operations'], fn($op) => self::trimOperations($op));
+
+		self::makeOperationsUnique($fileOp['operations'], $oldFileContents, $newFileContents);
+	}
+
+	/**
 	 * Attempts to trim our operation down a bit by removing some extra lines added from the diff conversion process.
 	 * 
+	 * @author sbulen
 	 * @param array $op
 	 * @return void
 	 */
-	protected static function trimOperation(array &$op): void
+	protected static function makeOperationsUnique(array &$ops, string $oldFile, string $newFile): void
 	{
-		// We start at index 0, like any sane language.
-		$searchLines = count($op['search']) - 1;
-		$findLines = count($op['replace']) - 1;
-		$counter = $searchLines > $findLines ? $searchLines : $findLines;
+		$oldFileArray = explode("\n", $oldFile);
 
-		// Trim up the end matching lines.
-		// When counting backwards, we want to count down from the highest index on each array.
-		for ($i = 0; $i < $counter && isset($op['search'][$searchLines - $i], $op['replace'][$findLines - $i]); $i++) {
-			// We can't trim to much.
-			if (count($op['search']) < 3 || count($op['replace']) < 3) {
-				break;
+		foreach ($ops as $ix => &$op) {
+			// No search string for these
+			if (in_array($op['action'], array('end', 'new file'))) {
+				continue;
 			}
 
-			if ($op['search'][$searchLines - $i] === $op['replace'][$findLines - $i]) {
-				unset($op['search'][$searchLines - $i], $op['replace'][$findLines - $i]);
-			} else {
-				break;
+			// Keep adding lines until the search is unambiguous
+			// For 'replace', add to both remove & add; for before/after, etc., only to the search criterion
+			// If empty, add a line to prime the pump...
+			$line = $op['lineStart'] - 2;
+			if (
+				empty($op['search'])
+				|| (
+					$op['action'] == 'replace'
+					&& empty($op['replace'])
+				)
+			) {
+				$op['search'] = $oldFileArray[$line] . "\n" . $op['search'];
+
+				if ($op['action'] == 'replace') {
+					$op['replace'] = $oldFileArray[$line] . "\n" . $op['replace'];
+				}
+
+				$line--;
+
+				// Keep status current...
+				$op['lineStart']--;
+
+				if (isset($op['removes'])) {
+					$op['removes']++;
+				}
+			}
+
+			$count = substr_count($oldFile, $op['search']);
+
+			if ($op['action'] == 'replace') {
+				$uniqueness = substr_count($newFile, $op['replace']);
+			}
+
+			// Cannot intrude upon updates from prior snippet...
+			$compareLine = ($ops[$ix - 1]['lineStart'] ?? 0) + ($ops[$ix - 1]['removes'] ?? 0) - 2;
+
+			while (($count > 1 || ($op['action'] == 'replace' && $uniqueness > 1)) && $line > 0) {
+				if ($line > $compareLine) {
+					$op['search'] = $oldFileArray[$line] . "\n" . $op['search'];
+
+					if ($op['action'] == 'replace') {
+						$op['replace'] = $oldFileArray[$line] . "\n" . $op['replace'];
+					}
+
+					$line--;
+
+					// Keep status current...
+					$op['lineStart']--;
+
+					if (isset($op['removes'])) {
+						$op['removes']++;
+					}
+
+					$count = substr_count($oldFile, $op['search']);
+
+					if ($op['action'] == 'replace') {
+						$uniqueness = substr_count($newFile, $op['replace']);
+					}
+				} else {
+					// These must be resolved by hand at this point...
+					self::writeDebug('[ERROR] Cannot disambiguate operation');
+					var_dump($op, $line, $compareLine);
+					die;
+				}
 			}
 		}
+	}
 
-		// Trim up the starting matching lines.
-		for ($i = 0; $i < $counter && isset($op['search'][$i], $op['replace'][$i]); $i++) {
-			// We can't trim to much.
-			if (count($op['search']) < 3 || count($op['replace']) < 3) {
-				break;
+	private static int $contextLines = 3;
+
+	/**
+	 * Trim away some extra context.
+	 * 
+	 * @author sbulen
+	 * @param array $op
+	 * @return void
+	 */
+	protected static function trimOperations(array &$op): void {
+		if (empty($op['action']) || $op['action'] !== 'replace') {
+			return;
+		}
+
+		for ($i = 1; $i <= self::$contextLines; $i++) {
+			self::removeBottomLine($op);
+			self::removeTopLine($op);
+		}
+	}
+
+	/**
+	 * Remove Bottom Line - & make sure it's common
+	 * 
+	 * @author sbulen
+	 * @param array $op
+	 * @return void
+	 */
+	protected static function removeBottomLine(array &$op): void
+	{
+		static $codeLine = '/(?<=\n|^)(.*\n?)$/D';
+
+		$sLine = preg_match($codeLine, $op['search'], $sMatch);
+		$rLine = preg_match($codeLine, $op['replace'], $rMatch);
+
+		if ($sLine && $rLine && $sMatch[1] === $rMatch[1]) {
+			$op['search'] = substr($op['search'], 0, strlen($op['search']) - strlen($sMatch[1]));
+			$op['replace'] = substr($op['replace'], 0, strlen($op['replace']) - strlen($rMatch[1]));
+
+			// Keep status current...
+			if (isset($op['removes'])) {
+				$op['removes']--;
 			}
+		}
+	}
 
-			if ($op['search'][$i] === $op['replace'][$i]) {
-				unset($op['search'][$i], $op['replace'][$i]);
-			} else {
-				break;
+	/**
+	 * Remove Top Line - & make sure it's common
+	 * 
+	 * @author sbulen
+	 * @param mixed $op
+	 * @return void
+	 */
+	protected static function removeTopLine(array &$op): void
+	{
+		// Get top lines from both...
+		$eolSearch = strpos($op['search'], "\n");
+		$eolReplace = strpos($op['replace'], "\n");
+
+		if ($eolSearch !== false && $eolReplace !== false) {
+			$topSearch = substr($op['search'], 0, $eolSearch + 1);
+			$topReplace = substr($op['replace'], 0, $eolReplace + 1);
+
+			if ($topSearch === $topReplace) {
+				// Don't remove comment lines, folks like those
+				if (substr(ltrim($topSearch), 0, 2) != '//') {
+					$op['search'] = substr($op['search'], $eolSearch + 1);
+					$op['replace'] = substr($op['replace'], $eolReplace + 1);
+
+					// Keep status current...
+					$op['lineStart']++;
+
+					if (isset($op['removes'])) {
+						$op['removes']--;
+					}
+				}
 			}
 		}
 	}
@@ -700,6 +860,8 @@ class buildPatch
 	 */
 	protected static function xlsTemplate(): string
 	{
+		$version = self::$to_smf_version;
+
 		return <<<EOF
 			<?xml version="1.0" encoding="utf-8"?>
 			<xsl:stylesheet version="1.0"
@@ -730,7 +892,7 @@ class buildPatch
 				</xsl:template>
 
 				<xsl:template match="mod:file">
-					<xsl:text disable-output-escaping="yes">&#x0A;&#x0A;&#x09;&lt;!-- 2.1.6 updates for </xsl:text>
+					<xsl:text disable-output-escaping="yes">&#x0A;&#x0A;&#x09;&lt;!-- {$version} updates for </xsl:text>
 					<xsl:value-of select="@name"/>
 					<xsl:text disable-output-escaping="yes"> --&gt;&#x0A;&#x09;</xsl:text>
 					<xsl:copy>
