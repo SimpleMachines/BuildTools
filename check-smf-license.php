@@ -13,35 +13,20 @@
 
 // Stuff we will ignore.
 $ignoreFiles = [
-	// Index files.
-	'\./attachments/index\.php',
-	'\./avatars/index\.php',
-	'\./avatars/[A-Za-z0-9]+/index\.php',
-	'\./cache/index\.php',
-	'\./custom_avatar/index\.php',
-	'\./Packages/index\.php',
-	'\./Packages/backups/index\.php',
-	'\./Smileys/[A-Za-z0-9]+/index\.php',
-	'\./Smileys/index\.php',
-	'\./Sources/index\.php',
-	'\./Sources/[\w/]+/index\.php',
-	'\./other/Schema/[\w/]+/*\.php',
-	'\./Themes/default/index\.php',
-	'\./Themes/default/[\w/]+/index\.php',
-	'\./Themes/index\.php',
+	// Index files in subdirectories.
+	'\./(?:\w+/)+\bindex\.php',
 
 	// Language Files are ignored as they don't use the License format.
-	'./Themes/default/languages/[A-Za-z0-9]+\.english\.php',
-	'./Languages/en_US/[A-Za-z0-9]+\.php',
-	'./Themes/default/languages/en_US/[A-Za-z0-9]+\.php',
-	'\./Languages/index\.php',
+	'./Themes/default/languages/',
+	'\./Languages/',
 
 	// Cache and miscellaneous.
 	'\./cache/',
-	'\./other/db_last_error\.php',
-	'\./other/update_[A-Za-z0-9_]+\.php',
 	'\./tests/',
 	'\./vendor/',
+
+	// Everything in other except install.php, upgrade.php, Settings.php and Settings_bak.php.
+	'\./other/(?!install|upgrade|Settings)\w+\.php',
 
 	// We will ignore Settings.php if this is a live dev site.
 	'\./Settings\.php',
