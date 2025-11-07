@@ -5,10 +5,10 @@
  *
  * @package SMF
  * @author Simple Machines https://www.simplemachines.org
- * @copyright 2022 Simple Machines and individual contributors
+ * @copyright 2025 Simple Machines and individual contributors
  * @license https://www.simplemachines.org/about/smf/license.php BSD
  *
- * @version 2.1.0
+ * @version 3.0 Alpha 4
  */
 
 // Stuff we will ignore.
@@ -18,9 +18,6 @@ $ignoreFiles = [
 	'./tests/',
 	'./vendor/',
 	'./.git',
-	'./Sources/minify/',
-	'./Sources/ReCaptcha/',
-	'./ZxcvbnPhp/',
 
 	// We will ignore Settings.php if this is a live dev site.
 	'./Settings.php',
