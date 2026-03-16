@@ -1,0 +1,1115 @@
+<?php
+
+/**
+ * Simple Machines Forum (SMF)
+ *
+ * @package SMF
+ * @author Simple Machines https://www.simplemachines.org
+ * @copyright 2025 Simple Machines and individual contributors
+ * @license https://www.simplemachines.org/about/smf/license.php BSD
+ *
+ * @version 1.0
+ */
+
+ /*
+  * This tool is designed to run via command line.
+  * To use this tool: php ./other/buildPatch.php -s=repos/smf3.0/ -o=/tmp -f='v2.1.5' -t='v2.1.6'
+  *         Will use the repos/smf3.0/ to build generate a upgrade file from 2.1.5 to 2.1.6 and output it to /tmp
+  * This tool is designed to be standalone and relies on no dependencies.
+  */
+declare(strict_types=1);
+
+// Ensure that we exit with a failure if an error occurs.
+try {
+	buildPatch::run();
+} catch (Exception $e) {
+	fwrite(STDERR, $e->getMessage());
+
+	exit(1);
+}
+
+class buildPatch
+{
+	/****************************
+	 * Internal static properties
+	 ****************************/
+
+	/**
+	 * SMF root folder.
+	 * @var string
+	 */
+	protected static string $smf_root = '';
+
+	/**
+	 * ID of the tag we are starting from.
+	 * @var string
+	 */
+	protected static string $from_tag = '';
+
+	/**
+	 * ID of the tag we are going to.
+	 * @var string
+	 */
+	protected static string $to_tag = '';
+
+	/**
+	 * The directory where archives will be saved and additionally the temp files are handled here.
+	 * @var string
+	 */
+	protected static string $output_dir = '';
+
+	/**
+	 * When true, shows the CLI help output.
+	 * @var bool
+	 */
+	protected static bool $help = false;
+
+	/**
+	 * When true, shows the CLI debug output.
+	 * @var bool
+	 */
+	protected static bool $debug = false;
+
+	/**
+	 * Should we verify the destination tag exists?
+	 *
+	 * @var bool
+	 */
+	protected static bool $no_verification = false;
+
+	/**
+	 * What type of patching we are doing.  Either xml or diff
+	 * @var
+	 */
+	protected static ?string $patch_type = null;
+
+	/**
+	 * Archive Options
+	 * Yes = Build normal
+	 * System = Use System binaries to build
+	 * No = Do not build.
+	 *
+	 * @var string|null
+	 */
+	protected static string $archive_mode = 'yes';
+
+	/**
+	 * SMF Version we are coming from.
+	 *
+	 * @var string
+	 */
+	protected static string $from_smf_version = '';
+
+	/**
+	 * SMF Version we are going to.
+	 *
+	 * @var string
+	 */
+	protected static string $to_smf_version = '';
+
+	/**
+	 * A list of archives we will build.
+	 * Currently this is:
+	 *      ZIP
+	 *      Tar.gz
+	 *      Tar.bz2
+	 * @var array
+	 */
+	protected static array $archives = [
+		[Phar::TAR, Phar::GZ],
+	];
+
+	/**
+	 * Map of CLI parameters to variables in this class.
+	 *
+	 * @var array
+	 */
+	protected static array $cli_param_map = [
+		's' => 'smf_root',
+		'f' => 'from_tag',
+		't' => 'to_tag',
+		'o' => 'output_dir',
+		'p' => 'patch_type',
+		'h' => 'help',
+		'd' => 'debug',
+		'help' => 'help',
+		'debug' => 'debug',
+		'skip-verify' => 'no_verification',
+		'name' => 'to_smf_version',
+		'archive' => 'archive_mode',
+	];
+
+	/**
+	 * List of operations we perform to normalize the file name.
+	 * Other directory is built and filtered later as the logic is easier to exclude after we have processed it.
+	 *
+	 * @var array
+	 */
+	protected static array $replacements = [
+		'~^/Themes/default/scripts~i' => '$theme' . 'dir/scripts',
+		'~^/Themes/default/images~i' => '$images' . 'dir',
+		'~^/Themes/default/languages~i' => '$language' . 'dir',
+		'~^/Themes/default~i' => '$theme' . 'dir',
+		'~^/Sources~i' => '$source' . 'dir',
+		'~^/other~i' => '$board' . 'dir/other',
+		'~^/~i' => '$board' . 'dir/',
+	];
+
+	/***********************
+	 * Public static methods
+	 ***********************/
+
+	public static function run()
+	{
+		if (php_sapi_name() !== 'cli') {
+			throw new Exception('This tool is to be ran via CLI');
+		}
+		self::prepareCLIhandler();
+
+		// The file has to exist.
+		if (!file_exists(self::$smf_root)) {
+			throw new Exception('Error: SMF Root does not exist');
+		}
+
+		// Cleanup the slashes.
+		self::$smf_root = realpath(rtrim(self::$smf_root, '/')) . '/';
+
+		// Find our version.
+		$contents = file_get_contents(self::$smf_root . '/index.php', false, null, 0, 1500);
+
+		if (!preg_match('/define\(\'SMF_VERSION\', \'([^\']+)\'\);/i', $contents, $version)) {
+			throw new Exception('Error: Could not locate SMF_VERSION in ' . self::$smf_root);
+		}
+
+		// Setting up our from version.
+		$from_tag_exists = trim(shell_exec('if [ $(git tag -l ' . escapeshellarg(self::$from_tag) . ') ]; then echo "true"; else echo ""; fi') ?? '');
+
+		if (empty($from_tag_exists)) {
+			throw new Exception('Unable to tag for ' . self::$from_tag);
+		}
+		// Get the version information.
+		$from_index = trim(shell_exec('git show ' . escapeshellarg(self::$from_tag . ':index.php')) ?? '');
+
+		// Validation of from version.
+		if (!preg_match('/define\(\'SMF_VERSION\', \'([^\']+)\'\);/i', $from_index, $version)) {
+			throw new Exception('Error: Could not locate SMF_VERSION in ' . self::$from_tag);
+		}
+
+		if (!preg_match('/(\d+)\.(\d+)\.(\d+)/i', $version[1])) {
+			throw new Exception('Error: Version is not stable in ' . self::$from_tag);
+		}
+		self::$from_smf_version = $version[1];
+
+		// Setting up our to version
+		$to_tag_exists = self::$no_verification ? true : trim(shell_exec('if [ $(git tag -l ' . escapeshellarg(self::$to_tag) . ') ]; then echo "true"; else echo ""; fi') ?? '');
+
+		if (empty($to_tag_exists)) {
+			throw new Exception('Unable to tag for ' . self::$to_tag);
+		}
+
+		// Get the version information.
+		if (empty(self::$to_smf_version)) {
+			$to_index = trim(shell_exec('git show ' . escapeshellarg(self::$to_tag . ':index.php')) ?? '');
+
+			// Validation of from version.
+			if (!preg_match('/define\(\'SMF_VERSION\', \'([^\']+)\'\);/i', $to_index, $version)) {
+				throw new Exception('Error: Could not locate SMF_VERSION in ' . self::$to_tag);
+			}
+
+			if (!preg_match('/(\d+)\.(\d+)\.(\d+)/i', $version[1])) {
+				throw new Exception('Error: Version is not stable in ' . self::$to_tag);
+			}
+			self::$to_smf_version = $version[1];
+		}
+
+		// Additional variables we need.
+		$to_file_prefix = self::getFileNamePrefix(self::$to_smf_version);
+		$to_php_version = self::getPhpMinimumVersion(self::$to_tag);
+
+		// Ensure we have a sane patch type.
+		if (self::$patch_type === null || !in_array(self::$patch_type, ['xml', 'diff'])) {
+			self::$patch_type = version_compare(self::$to_smf_version, '3.0.0-alpha1', '<') ? 'xml' : 'diff';
+		}
+
+		self::writeDebug('[patch] Creating working folder');
+		$tmp_dir = self::$output_dir . '/' . $to_file_prefix . 'patch' . DIRECTORY_SEPARATOR;
+
+		if (empty($tmp_dir)) {
+			throw new Exception('Temp directory name missing');
+		}
+
+		// Cleanup any previous runs.
+		@array_map('unlink', glob($tmp_dir . '/*'));
+		@rmdir($tmp_dir);
+		@mkdir($tmp_dir);
+
+		// When we generate the patch, we may end up needing to do some special operations.
+		$info_operations = [];
+
+		self::writeDebug('[patch] Generating diff');
+		shell_exec('git diff -p -M -C -C -B --default-prefix --no-relative ' . escapeshellarg(self::$from_tag) . '...' . escapeshellarg(self::$to_tag) . ' > ' . escapeshellcmd($tmp_dir . $to_file_prefix . 'patch.diff'));
+
+		// Running something below 3.0
+		if (self::$patch_type === 'xml') {
+			self::writeDebug('[patch] Converting to xml');
+			self::convertDiffToPatch($tmp_dir . $to_file_prefix . 'patch.diff', self::$to_smf_version, $tmp_dir, $to_file_prefix, $info_operations);
+			
+			if (strtolower(self::$archive_mode) !== 'no' || !self::$debug) {
+				self::writeDebug(msg: '[patch] Cleaning up diff');
+				unlink($tmp_dir . $to_file_prefix . 'patch.diff');
+			}
+
+			// Sort the output so its more organized.
+			self::sortPatchFile($tmp_dir . $to_file_prefix . 'patch.xml');
+
+			// Apply some qualify of life fixes.
+			self::cleanupPatchFile($tmp_dir . $to_file_prefix . 'patch.xml');
+		}
+
+		// Template for our package info file.
+		self::writeDebug('[patch] Building info file');
+		$infoFileContents = self::packageInfoTemplate(self::$to_smf_version, $to_file_prefix, self::$from_smf_version, $to_php_version, self::$patch_type, $info_operations);
+
+		self::writeDebug(msg: '[patch] Writing info file');
+		file_put_contents($tmp_dir . 'package-info.xml', $infoFileContents);
+
+		$tmp_file = self::$output_dir . '/' . $to_file_prefix;
+		$build = 'patch';
+
+		if (strtolower(self::$archive_mode) === 'no') {
+			self::writeDebug('[patch] Not building archive');
+
+			exit;
+		}
+
+		// Ensure we run a clean setup for the build.
+		@array_map('unlink', glob($tmp_file . $build . '.*'));
+
+		if (strtolower(self::$archive_mode) === 'system') {
+			self::archiveUsingSystemTools($tmp_file, $tmp_dir, $build);
+		} else {
+			self::archiveWithPhar($tmp_file, $tmp_dir, $build);
+		}
+
+		// Cleanup.
+		@array_map('unlink', glob($tmp_dir . '/*'));
+		@array_map('unlink', glob($tmp_dir . '/.*'));
+		@rmdir($tmp_dir);
+	}
+
+	/*************************
+	 * Internal static methods
+	 *************************/
+
+	/**
+	 * Reads the argv and parses them into variables we are passing into other parts of our code.
+	 *
+	 */
+	protected static function prepareCLIhandler(): void
+	{
+		// Read the params into a place we can handle this.
+		$params = $_SERVER['argv'];
+		array_shift($params);
+
+		foreach ($params as $param) {
+			if (strpos($param, '=') !== false) {
+				list($var, $val) = explode('=', $param);
+
+				if (!isset(self::$cli_param_map[ltrim($var, '-')])) {
+					continue;
+				}
+
+				self::${self::$cli_param_map[ltrim($var, '-')]} = $val;
+			} elseif (isset(self::$cli_param_map[ltrim($param, '-')])) {
+				self::${self::$cli_param_map[ltrim($param, '-')]} = true;
+			}
+		}
+
+		// Need help, hopefully not.
+		if (empty($params) || self::$help) {
+			echo 'SMF Build Release Tool' . "\n"
+				. '$ php ' . basename(__FILE__) . " -s=path/to/smf/ -o=/tmp -f=3.0.1 -t=3.0.2  \n"
+				. '-s=/path/to/smf     Where SMF has its files' . "\n"
+				. '-o=/path/to/out     Where to store the generated files' . "\n"
+				. '-f=tag_id        	Tag in git for our source version.' . "\n"
+				. '-t=tag_id        	Tag in git for our target version.' . "\n"
+				. '-p=xml               The of patch file (xml or diff)' . "\n"
+				. '--skip-verify        Skips verification of destination tag.' . "\n"
+				. '--name=VERSION       Provides an alternative name for the destination version.' . "\n"
+				. '--archive=yes        Archive building. Yes (default): build using PHP Phar; No: Do not build; System: Build using the operation system tools' . "\n"
+				. '-h, --help           This help file.' . "\n"
+				. '-d, --debug          Prints out more debug info.' . "\n"
+
+				. "\n";
+
+			die;
+		}
+		unset($params);
+
+		// Defaults.
+		self::$smf_root = self::$smf_root === '' ? realpath($_SERVER['PWD']) : realpath(self::$smf_root);
+		self::$output_dir = self::$output_dir === '' ? realpath($_SERVER['PWD'] . '/..') : realpath(self::$output_dir);
+	}
+
+	/**
+	 * Taking the SMF version found in index.php, we figure out how we would name the files.
+	 *
+	 * @param string $version
+	 * @return string
+	 */
+	protected static function getFileNamePrefix(string $version): string
+	{
+		preg_match('~v?([\d]+)[-._]?([\d]+)[-._\s]?(alpha|beta|rc)?\.?\s?([\d]?)~i', $version, $matches);
+
+		// Sometimes we used beta.1 instead of beta-1
+		if (isset($matches[3]) && $matches[3] == 'beta.') {
+			$matches[3] = 'beta';
+		}
+
+		$prefix = 'smf_' . $matches[1] . '-' . $matches[2];
+
+		// 4 part name "SMF 2.0 Alpha 3" will produce [2, 0, 'Alpha', 3]
+		if (!empty($matches[4])) {
+			$prefix .= '-' . strtolower($matches[3]) . $matches[4];
+		} elseif (!empty($matches[3])) {
+			$prefix .= '-' . $matches[3];
+		}
+
+		return $prefix . '_';
+	}
+
+	/**
+	 * Write a debug output.
+	 *
+	 * @param string $msg
+	 */
+	protected static function writeDebug(string $msg): void
+	{
+		if (self::$debug) {
+			fwrite(STDOUT, $msg . "\n");
+			flush();
+		}
+	}
+
+	/**
+	 * Generates the package-info.xml File
+	 *
+	 * @param string $version SMF version we are going to.
+	 * @param string $file_version SMF version file prefix.
+	 * @param string $previous_version The previous SMF version (friendly)
+	 * @param string $min_php_version Minimum version of PHP supported for the version we are going to.
+	 * @param array $info_operations Additional operations to perform.
+	 * @return string XML data for package-info.xml
+	 */
+	protected static function packageInfoTemplate(string $version, string $file_version, string $previous_version, string $min_php_version, string $extension, array $info_operations)
+	{
+		$template = <<<END
+			<?xml version="1.0"?>
+			<!DOCTYPE package-info SYSTEM "http://www.simplemachines.org/xml/package-info">
+			<package-info xmlns="http://www.simplemachines.org/xml/package-info" xmlns:smf="http://www.simplemachines.org/">
+				<id>smf:smf-{$version}</id>
+				<name>SMF {$version} Update</name>
+				<version>1.0</version>
+				<type>modification</type>
+
+				<install for="{$previous_version}">
+					<readme type="inline" parsebbc="true">This will update your forum to SMF {$version}.</readme>
+					<code type="inline"><![CDATA[<?php
+						define('REQUIRED_PHP_VERSION', '{$min_php_version}');
+						if (version_compare(PHP_VERSION, REQUIRED_PHP_VERSION, '<')) {
+							fatal_error('This update requires a minimum of PHP ' . REQUIRED_PHP_VERSION . ' in order to function. (You are currently running PHP ' . PHP_VERSION . ')');
+						}
+
+						// Update smfVersion.
+						updateSettings(array('smfVersion' => '{$version}'));
+					?>]]></code>
+					<modification format="{$extension}">{$file_version}patch.{$extension}</modification>
+			END;
+
+		foreach ($info_operations['remove-file'] ?? [] as $rm) {
+			$template .= '
+		<remove-file name="' . $rm . '" />';
+		}
+
+		$template .= <<<END
+
+				</install>
+				<uninstall for="{$version}">
+					<readme type="inline" parsebbc="true">This will remove the changes introduced by SMF {$version}. [b]This is generally not a good idea.[/b]</readme>
+					<modification format="{$extension}" reverse="true">{$file_version}patch.{$extension}</modification>
+					<code type="inline"><![CDATA[<?php updateSettings(array('smfVersion' => '{$previous_version}'));]]></code>
+			END;
+
+		foreach ($info_operations['remove-file'] ?? [] as $rm) {
+			$file_base = basename($rm);
+			$file_path = dirname($rm);
+
+			$template .= '
+		<require-file name="' . $file_base . '" destination="' . $file_path . '" />';
+		}
+
+		$template .= '
+	</uninstall>
+</package-info>';
+
+		return $template;
+	}
+
+	/**
+	 * Given a git tag, find the minimum version of PHP it supports.
+	 * This will search in locations for SMF 3.0 (Sources/Maintenance/Maintenance.php) and 2.x (other/install.php)
+	 *
+	 * @param string $tag (git tag -l)
+	 * @throws \Exception
+	 * @return string Minimum PHP version supported
+	 */
+	protected static function getPhpMinimumVersion(string $tag): string
+	{
+		// SMF 3.0 way.
+		$maintenance_file = trim(shell_exec('git show ' . escapeshellarg($tag . ':Sources/Maintenance/Maintenance.php') . ' 2> /dev/null || echo ""') ?? '');
+
+		if (!empty($maintenance_file)) {
+			if (!preg_match('/public\s*const\s*PHP_MIN_VERSION\s*=\s*\'([^\']+)\';/i', $maintenance_file, $version)) {
+				throw new Exception('Error: Unable to parse PHP version from installer in ' . $tag);
+			}
+
+			return $version[1];
+		}
+
+		// SMF 2.1 and below.
+		$install_file = trim(shell_exec('git show ' . escapeshellarg($tag . ':other/install.php') . ' 2> /dev/null || echo ""') ?? '');
+
+		if (empty($install_file)) {
+			throw new Exception('Error: Unable to read contents of installer in ' . $tag);
+		}
+
+		if (!preg_match('/\$GLOBALS\[\'required_php_version\'\]\s*=\s*\'([^\']+)\';/i', $install_file, $version)) {
+			throw new Exception('Error: Unable to parse PHP version from installer in ' . $tag);
+		}
+
+		return $version[1];
+	}
+
+	/**
+	 * Given the contents of a diff file, attempt to parse our a valid XML data file.
+	 *
+	 * @param string $diff_file File path to the diff file.
+	 * @param string $version SMF Version we are going to.
+	 * @param string $working_dir Working directory.
+	 * @param string $to_file_prefix File prefix for this patch.
+	 * @param array &$info_operations Operations passed onto our package-info.xml
+	 */
+	protected static function convertDiffToPatch(string $diff_file, string $version, string $working_dir, string $to_file_prefix, array &$info_operations): void
+	{
+		$content = file($diff_file);
+		$file_operations = [];
+		$operations = [];
+		$counter = 0;
+		$opCounter = 0;
+		$lineStart = 0;
+		$removes = 0;
+		$infoOperation = null;
+
+		// First walk each line to figure out what we are doing.
+		for ($i = 0; $i < count($content); $i++) {
+			// Trigger a new file operation.
+			if (str_starts_with($content[$i], '--- a/')) {
+				$rawFile = trim(substr($content[$i], 5));
+				$file = preg_replace(
+					array_keys(self::$replacements),
+					array_values(self::$replacements),
+					$rawFile,
+				);
+
+				$operations[$counter]['path'] = $file;
+				$operations[$counter]['file'] = $rawFile;
+
+				// Is this a file deletion?
+				if (str_starts_with($content[$i + 1], '+++ /dev/null')) {
+					$file_operations['replace'] = [''];
+					$infoOperation = basename($file);
+					$info_operations['remove-file'][] = $file;
+				}
+
+				while (!str_starts_with($content[$i + 1], '@@')) {
+					$i++;
+				}
+				continue;
+			}
+
+			/*
+			 * When we end a block of code, tie it off and add it as a operation
+			 * We do this when we detect:
+			 *      A new block (@@)
+			 *      A new file (diff --git)
+			 *      No more operations / EOF
+			 *
+			 * @author emanuele
+			 * @copyright 2012 emanuele, Simple Machines
+			 * @license http://www.simplemachines.org/about/smf/license.php BSD
+			 */
+
+			// Appearing to start a new section, tie things off.
+			if (
+				(
+					str_starts_with($content[$i], '@@')
+					|| str_starts_with($content[$i], 'diff --git')
+					|| !isset($content[$i + 1])
+				) && !empty($file_operations)
+			) {
+				// If this was a special info operation, don't do this.
+				if ($infoOperation !== null) {
+					self::writeDebug("[patch] Writing file {$infoOperation}");
+
+					file_put_contents($working_dir . DIRECTORY_SEPARATOR . $infoOperation, $file_operations['search']);
+					unset($operations[$counter]);
+					$infoOperation = null;
+				} else {
+					$operations[$counter]['operations'][$opCounter]['search'] = str_replace(['<![CDATA[', ']]>'], ['<![CDA\' . \'TA[', ']\' . \']>'], implode('', $file_operations['search']));
+					$operations[$counter]['operations'][$opCounter]['replace'] = str_replace(['<![CDATA[', ']]>'], ['<![CDA\' . \'TA[', ']\' . \']>'], implode('', $file_operations['replace']));
+					$operations[$counter]['operations'][$opCounter]['action'] = 'replace';
+					$operations[$counter]['operations'][$opCounter]['lineStart'] = $lineStart;
+					$operations[$counter]['operations'][$opCounter]['removes'] = $removes;
+
+					$opCounter++;
+
+					// Get information about where the change is going.
+					if (str_starts_with($content[$i], '@@')){
+						preg_match('/@@ -(\d{1,10}),{0,1}(\d{0,10}) \+\d{1,10},{0,1}\d{0,10} @@/', $content[$i], $matches);
+						$lineStart = $matches[1] ?? 0;
+						$removes = $matches[2] ?? 0;
+					}
+
+					if (str_starts_with($content[$i], 'diff --git')) {
+						$file = '';
+						$counter++;
+					}
+				}
+
+				$file_operations = [];
+				continue;
+			}
+
+			// Get information about where the change is going.
+			if (str_starts_with($content[$i], '@@')){
+				preg_match('/@@ -(\d{1,10}),{0,1}(\d{0,10}) \+\d{1,10},{0,1}\d{0,10} @@/', $content[$i], $matches);
+				$lineStart = $matches[1] ?? 0;
+				$removes = $matches[2] ?? 0;
+			}
+
+			if (!empty($file)) {
+				if (str_starts_with($content[$i], ' ')) {
+					$file_operations['replace'][] = $file_operations['search'][] = substr($content[$i], 1);
+				}
+
+				if (str_starts_with($content[$i], '-')) {
+					$file_operations['search'][] = substr($content[$i], 1);
+				} elseif (str_starts_with($content[$i], '+')) {
+					$file_operations['replace'][] = substr($content[$i], 1);
+				}
+			}
+		}
+
+		// Build the data.
+		$ret = '<?xml version="1.0"?>
+<!DOCTYPE modification SYSTEM "http://www.simplemachines.org/xml/modification">
+<modification xmlns="http://www.simplemachines.org/xml/modification" xmlns:smf="http://www.simplemachines.org/">
+
+	<id>smf:' . $version . '</id>
+	<version>1.0</version>';
+
+		foreach ($operations as $file) {
+			// We only really care about php, js and css files.
+			if (str_starts_with($file['path'], '$board' . 'dir/other') || !in_array(pathinfo($file['path'], PATHINFO_EXTENSION), ['php', 'css', 'js'])) {
+				continue;
+			}
+
+			$ret .= '
+	<!-- ' . $version . ' updates for ' . basename($file['path']) . ' -->
+	<file name="' . $file['path'] . '"' . (str_starts_with($file['path'], '$language' . 'dir/') ? ' error="ignore"' : '') . '>';
+
+			foreach ($file['operations'] as $file_operations) {
+				$ret .= '
+		<operation>
+			<search position="replace"><![CDATA[' .
+				$file_operations['search'] . ']]></search>
+			<add><![CDATA[' .
+				$file_operations['replace'] . ']]></add>
+		</operation>';
+			}
+
+			$ret .= '
+	</file>';
+		}
+
+		$ret .= '
+</modification>';
+
+		self::writeDebug('[patch] Writing patch.xml');
+		file_put_contents($working_dir . DIRECTORY_SEPARATOR . $to_file_prefix . 'patch.xml', $ret);
+	}
+
+	/**
+	 * Optimize operations on a single file.
+	 *
+	 * @param array $ops
+	 * @return void
+	 */
+	protected static function performOptimizations(array &$fileOp): void {
+		$oldFileContents = shell_exec('git show ' . self::$from_tag . ':' . ltrim($fileOp['file'], '/'));
+		if (empty($oldFileContents)) {
+			return;
+		}
+
+		$newFileContents = shell_exec('git show ' . self::$to_tag . ':' . ltrim($fileOp['file'], '/'));
+		if (empty($newFileContents)) {
+			return;
+		}
+
+		array_walk($fileOp['operations'], fn($op) => self::trimOperations($op));
+
+		self::makeOperationsUnique($fileOp['operations'], $oldFileContents, $newFileContents);
+	}
+
+	/**
+	 * Attempts to trim our operation down a bit by removing some extra lines added from the diff conversion process.
+	 * 
+	 * @author sbulen
+	 * @param array $op
+	 * @return void
+	 */
+	protected static function makeOperationsUnique(array &$ops, string $oldFile, string $newFile): void
+	{
+		$oldFileArray = explode("\n", $oldFile);
+
+		foreach ($ops as $ix => &$op) {
+			// No search string for these
+			if (in_array($op['action'], array('end', 'new file'))) {
+				continue;
+			}
+
+			// Keep adding lines until the search is unambiguous
+			// For 'replace', add to both remove & add; for before/after, etc., only to the search criterion
+			// If empty, add a line to prime the pump...
+			$line = $op['lineStart'] - 2;
+			if (
+				empty($op['search'])
+				|| (
+					$op['action'] == 'replace'
+					&& empty($op['replace'])
+				)
+			) {
+				$op['search'] = $oldFileArray[$line] . "\n" . $op['search'];
+
+				if ($op['action'] == 'replace') {
+					$op['replace'] = $oldFileArray[$line] . "\n" . $op['replace'];
+				}
+
+				$line--;
+
+				// Keep status current...
+				$op['lineStart']--;
+
+				if (isset($op['removes'])) {
+					$op['removes']++;
+				}
+			}
+
+			$count = substr_count($oldFile, $op['search']);
+
+			if ($op['action'] == 'replace') {
+				$uniqueness = substr_count($newFile, $op['replace']);
+			}
+
+			// Cannot intrude upon updates from prior snippet...
+			$compareLine = ($ops[$ix - 1]['lineStart'] ?? 0) + ($ops[$ix - 1]['removes'] ?? 0) - 2;
+
+			while (($count > 1 || ($op['action'] == 'replace' && $uniqueness > 1)) && $line > 0) {
+				if ($line > $compareLine) {
+					$op['search'] = $oldFileArray[$line] . "\n" . $op['search'];
+
+					if ($op['action'] == 'replace') {
+						$op['replace'] = $oldFileArray[$line] . "\n" . $op['replace'];
+					}
+
+					$line--;
+
+					// Keep status current...
+					$op['lineStart']--;
+
+					if (isset($op['removes'])) {
+						$op['removes']++;
+					}
+
+					$count = substr_count($oldFile, $op['search']);
+
+					if ($op['action'] == 'replace') {
+						$uniqueness = substr_count($newFile, $op['replace']);
+					}
+				} else {
+					// These must be resolved by hand at this point...
+					self::writeDebug('[ERROR] Cannot disambiguate operation');
+					var_dump($op, $line, $compareLine);
+					die;
+				}
+			}
+		}
+	}
+
+	private static int $contextLines = 3;
+
+	/**
+	 * Trim away some extra context.
+	 * 
+	 * @author sbulen
+	 * @param array $op
+	 * @return void
+	 */
+	protected static function trimOperations(array &$op): void {
+		if (empty($op['action']) || $op['action'] !== 'replace') {
+			return;
+		}
+
+		for ($i = 1; $i <= self::$contextLines; $i++) {
+			self::removeBottomLine($op);
+			self::removeTopLine($op);
+		}
+	}
+
+	/**
+	 * Remove Bottom Line - & make sure it's common
+	 * 
+	 * @author sbulen
+	 * @param array $op
+	 * @return void
+	 */
+	protected static function removeBottomLine(array &$op): void
+	{
+		static $codeLine = '/(?<=\n|^)(.*\n?)$/D';
+
+		$sLine = preg_match($codeLine, $op['search'], $sMatch);
+		$rLine = preg_match($codeLine, $op['replace'], $rMatch);
+
+		if ($sLine && $rLine && $sMatch[1] === $rMatch[1]) {
+			$op['search'] = substr($op['search'], 0, strlen($op['search']) - strlen($sMatch[1]));
+			$op['replace'] = substr($op['replace'], 0, strlen($op['replace']) - strlen($rMatch[1]));
+
+			// Keep status current...
+			if (isset($op['removes'])) {
+				$op['removes']--;
+			}
+		}
+	}
+
+	/**
+	 * Remove Top Line - & make sure it's common
+	 * 
+	 * @author sbulen
+	 * @param mixed $op
+	 * @return void
+	 */
+	protected static function removeTopLine(array &$op): void
+	{
+		// Get top lines from both...
+		$eolSearch = strpos($op['search'], "\n");
+		$eolReplace = strpos($op['replace'], "\n");
+
+		if ($eolSearch !== false && $eolReplace !== false) {
+			$topSearch = substr($op['search'], 0, $eolSearch + 1);
+			$topReplace = substr($op['replace'], 0, $eolReplace + 1);
+
+			if ($topSearch === $topReplace) {
+				// Don't remove comment lines, folks like those
+				if (substr(ltrim($topSearch), 0, 2) != '//') {
+					$op['search'] = substr($op['search'], $eolSearch + 1);
+					$op['replace'] = substr($op['replace'], $eolReplace + 1);
+
+					// Keep status current...
+					$op['lineStart']++;
+
+					if (isset($op['removes'])) {
+						$op['removes']--;
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * Given a patch file, apply our XLS template to automatically sort the contents.
+	 * @param string $output_file
+	 */
+	protected static function sortPatchFile(string $output_file): void
+	{
+		$xml1 = new DOMDocument();
+		$xml1->load($output_file);
+
+		$xslt = new DOMDocument();
+		$xslt->loadXML(self::xlsTemplate());
+
+		$proc = new XSLTProcessor();
+		$proc->importStylesheet($xslt);
+		$proc->transformToURI($xml1, 'file://' . $output_file);
+	}
+
+	/**
+	 * A template for sorting our XML output.
+	 * Not required just makes things easier to read.
+	 *
+	 * @return string XML Template
+	 */
+	protected static function xlsTemplate(): string
+	{
+		$version = self::$to_smf_version;
+
+		return <<<EOF
+			<?xml version="1.0" encoding="utf-8"?>
+			<xsl:stylesheet version="1.0"
+							xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+							xmlns:smf="http://www.simplemachines.org/"
+							xmlns:mod="http://www.simplemachines.org/xml/modification"
+							exclude-result-prefixes="smf mod">
+
+				<xsl:output method="xml" indent="yes" cdata-section-elements="mod:search mod:add" doctype-system="http://www.simplemachines.org/xml/modification"/>
+
+				<xsl:template match="@* | node()">
+					<xsl:copy>
+						<xsl:apply-templates select="@* | node()"/>
+					</xsl:copy>
+				</xsl:template>
+
+				<xsl:template match="mod:modification">
+					<xsl:copy>
+						<xsl:text>&#x0A;&#x09;</xsl:text>
+						<xsl:apply-templates select="mod:id"/>
+						<xsl:text>&#x0A;&#x09;</xsl:text>
+						<xsl:apply-templates select="mod:version"/>
+						<xsl:apply-templates select="mod:file">
+							<xsl:sort select="@name"/>
+						</xsl:apply-templates>
+						<xsl:text>&#x0A;</xsl:text>
+					</xsl:copy>
+				</xsl:template>
+
+				<xsl:template match="mod:file">
+					<xsl:text disable-output-escaping="yes">&#x0A;&#x0A;&#x09;&lt;!-- {$version} updates for </xsl:text>
+					<xsl:value-of select="@name"/>
+					<xsl:text disable-output-escaping="yes"> --&gt;&#x0A;&#x09;</xsl:text>
+					<xsl:copy>
+						<xsl:apply-templates select="@* | node()"/>
+					</xsl:copy>
+				</xsl:template>
+			</xsl:stylesheet>
+			EOF;
+	}
+
+	/**
+	 * Perform some cleanup operations that just make things easier.
+	 *
+	 * @param string $output_file
+	 */
+	protected static function cleanupPatchFile(string $output_file): void
+	{
+		$contents = file_get_contents($output_file);
+
+		// Be more precise with changes to license blocks.
+		// Takes a change to the copyright year and version, then breaks it into 2 operations.
+		$contents = preg_replace(
+			'~		<operation>
+			<search position="replace"><!\[CDATA\[( \* @copyright \d{4} Simple Machines and individual contributors)
+ \* @license https://www\.simplemachines\.org/about/smf/license\.php BSD
+ \*
+( \* @version \d\.\d\.\d)
+\]\]></search>
+			<add><!\[CDATA\[( \* @copyright \d{4} Simple Machines and individual contributors)
+ \* @license https://www\.simplemachines\.org/about/smf/license\.php BSD
+ \*
+( \* @version \d\.\d\.\d)
+\]\]></add>
+		</operation>~',
+			'		<operation>
+			<search position="replace"><![CDATA[$1]]></search>
+			<add><![CDATA[$3]]></add>
+		</operation>
+		<operation>
+			<search position="replace"><![CDATA[$2]]></search>
+			<add><![CDATA[$4]]></add>
+		</operation>',
+			$contents,
+		);
+
+		// Additional version fixing.
+		// Takes the change for the SMF version and software year defines and breaks into 2 operations.
+		$contents = preg_replace(
+			'~		<operation>
+			<search position="replace"><!\[CDATA\[(define\(\'SMF_VERSION\', \'\d\.\d\.\d\'\);)
+define\(\'SMF_FULL_VERSION\', \'SMF \' . SMF_VERSION\);
+(define\(\'SMF_SOFTWARE_YEAR\', \'\d{4}\'\);)
+\]\]></search>
+			<add><!\[CDATA\[(define\(\'SMF_VERSION\', \'\d\.\d\.\d\'\);)
+define\(\'SMF_FULL_VERSION\', \'SMF \' . SMF_VERSION\);
+(define\(\'SMF_SOFTWARE_YEAR\', \'\d{4}\'\);)
+\]\]></add>
+		</operation>~',
+			'		<operation>
+			<search position="replace"><![CDATA[$1]]></search>
+			<add><![CDATA[$3]]></add>
+		</operation>
+		<operation>
+			<search position="replace"><![CDATA[$2]]></search>
+			<add><![CDATA[$4]]></add>
+		</operation>',
+			$contents,
+		);
+
+		// Would you guess we are doing more cleaning of the version updates?
+		// Takes a version header and define updates and breaks it up into 4 operations.
+		ini_set('pcre.backtrack_limit', 10000000);
+		$contents = preg_replace(
+			'~		<operation>
+			<search position="replace"><!\[CDATA\[( \* @copyright \d{4} Simple Machines and individual contributors)
+ \* @license https:\/\/www\.simplemachines\.org\/about\/smf\/license\.php BSD
+ \*
+( \* @version \d\.\d\.\d)
+(\X*?)(define\(\'SMF_VERSION\', \'\d\.\d\.\d\'\);)
+(\X*?)(define\(\'SMF_SOFTWARE_YEAR\', \'\d{4}\'\);)
+\]\]></search>
+			<add><!\[CDATA\[( \* @copyright \d{4} Simple Machines and individual contributors)
+ \* @license https:\/\/www\.simplemachines\.org\/about\/smf\/license\.php BSD
+ \*
+( \* @version \d\.\d\.\d)
+\3(define\(\'SMF_VERSION\', \'\d\.\d\.\d\'\);)
+\5(define\(\'SMF_SOFTWARE_YEAR\', \'\d{4}\'\);)
+\]\]></add>
+		</operation>~',
+			'		<operation>
+			<search position="replace"><![CDATA[$1]]></search>
+			<add><![CDATA[$7]]></add>
+		</operation>
+		<operation>
+			<search position="replace"><![CDATA[$2]]></search>
+			<add><![CDATA[$8]]></add>
+		</operation>
+		<operation>
+			<search position="replace"><![CDATA[$4]]></search>
+			<add><![CDATA[$9]]></add>
+		</operation>
+		<operation>
+			<search position="replace"><![CDATA[$6]]></search>
+			<add><![CDATA[$10]]></add>
+		</operation>',
+			$contents
+		);
+
+		// Get rid of useless ending newlines in replace statements.
+		$contents = preg_replace('~(<search position="replace"><!\[CDATA\[)((?:\X(?!\]\]>))*)\n(\]\]></search>\s+<add><!\[CDATA\[)((?:\X(?!\]\]>))*)\n(\]\]></add>)~', '$1$2$3$4$5', $contents);
+
+		// Move ending newlines to start in before statements.
+		$contents = preg_replace('~(<search position="before"><!\[CDATA\[)((?:\X(?!\]\]>))*)\n(\]\]></search>\s+<add><!\[CDATA\[)((?:\X(?!\]\]>))*)\n(\]\]></add>)~', '$1' . "\n" . '$2$3' . "\n" . '$4$5', $contents);
+
+		file_put_contents($output_file, $contents);
+	}
+
+	/**
+	 * Build the archive using PHP's PHAR.
+	 *
+	 * @param string $tmp_file Prefix of filename we are building
+	 * @param string $tmp_dir Directory containing the files we are archiving
+	 * @param string $build Name of the build
+	 */
+	protected static function archiveWithPhar(string $tmp_file, string $tmp_dir, string $build): void
+	{
+		foreach (self::$archives as $a) {
+			$extension = $a[0] === Phar::ZIP ? 'zip' : ($a[1] === Phar::GZ ? 'tar.gz' : 'tar.bz2');
+
+			self::writeDebug("[patch] [{$extension}] Creating empty archive");
+
+			$pd = new PharData(
+				$tmp_file . $build . '.tmp',
+				FilesystemIterator::SKIP_DOTS | FilesystemIterator::UNIX_PATHS,
+				null,
+				$a[0],
+			);
+
+			// Quickly now, use a iterator to build the main archive.
+			self::writeDebug("[{$build}] [{$extension}] Adding initial files");
+			$pd->buildFromIterator(new GlobIterator(pattern: $tmp_dir . DIRECTORY_SEPARATOR . '*'), $tmp_dir . DIRECTORY_SEPARATOR);
+
+			// Convert the archive into the proper archive and compression.
+			self::writeDebug("[{$build}] [{$extension}] Writing file");
+			$pd->convertToData($a[0], $a[1], $extension);
+
+			// Zip needs to be compressed with DEFLATE, which phar doesn't do.
+			if ($a[0] === Phar::ZIP) {
+				self::writeDebug("[{$build}] [{$extension}] Compressing");
+				$zip = new ZipArchive();
+				$zip->open($tmp_file . $build . '.' . $extension);
+
+				for ($i = 0; $i < $zip->numFiles; $i++) {
+					$zip->setCompressionIndex($i, ZipArchive::CM_DEFLATE);
+				}
+				$zip->close();
+			}
+
+			// Tar files leave behind the .tmp file.
+			if ($a[0] === Phar::TAR) {
+				@unlink($tmp_file . $build . '.tmp');
+			}
+		}
+	}
+
+	protected static function archiveUsingSystemTools(string $tmp_file, string $tmp_dir, string $build): void
+	{
+		$current_directory = getcwd();
+
+		// Try to locate the tar binaries.
+		$tar_paths = ['/usr/bin/tar', '/bin/tar'];
+		$tar_path = array_filter($tar_paths, fn($bin) => file_exists($bin))[0] ?? null;
+
+		if ($tar_path === null) {
+			throw new Exception('Unable to locate the tar binary');
+		}
+
+		// Try to locate the zip binaries.
+		$zip_paths = ['/usr/bin/zip', '/bin/zip'];
+		$zip_path = array_filter($zip_paths, fn($bin) => file_exists($bin))[0] ?? null;
+
+		if ($zip_path === null) {
+			throw new Exception('Unable to locate the zip binary');
+		}
+
+		// Tar needs some extra args.
+		$tar_args = [
+			'--no-xattrs',
+			'--no-acls',
+			'--exclude=\'.*\'',
+		];
+
+		// Mac resource files and other garbage.
+		if (PHP_OS_FAMILY === 'Darwin') {
+			$tar_args[] = '--no-mac-metadata';
+			$tar_args[] = '--no-fflags';
+		}
+
+		// Enter the working directory.
+		chdir($tmp_dir);
+
+		foreach (self::$archives as $a) {
+			$extension = $a[0] === Phar::ZIP ? 'zip' : ($a[1] === Phar::GZ ? 'tar.gz' : 'tar.bz2');
+			self::writeDebug("[patch] [{$extension}] Building");
+
+			if ($a[0] === Phar::ZIP) {
+				shell_exec($zip_path . ' -x ".*/" -1 ' . $tmp_file . $build . '.zip -r *');
+			} elseif ($a[0] === Phar::TAR && $a[1] === Phar::GZ) {
+				shell_exec($tar_path . ' ' . implode(' ', $tar_args) . ' -czf ' . $tmp_file . $build . '.tar.gz *');
+			} elseif ($a[0] === Phar::TAR && $a[1] === Phar::BZ2) {
+				shell_exec($tar_path . ' ' . implode(' ', $tar_args) . ' -cjf ' . $tmp_file . $build . '.tar.bz *');
+			} else {
+				throw new Exception('Unknown compression method');
+			}
+		}
+
+		// Return to where we started.
+		chdir($current_directory);
+	}
+}

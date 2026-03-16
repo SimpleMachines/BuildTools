@@ -2,7 +2,8 @@
     "name": "simplemachines/build-tools",
     "require": {
         "overtrue/phplint": "9.0.4",
-        "php": ">=8.0"
+        "php": ">=8.0",
+        "crowdin/crowdin-api-client": "^1.18"
     },
     "config": {
         "platform": {
