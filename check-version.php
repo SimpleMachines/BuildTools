@@ -53,7 +53,7 @@ try {
 		throw new Exception($errmsg);
 	}
 
-	if (!preg_match('~^((\d+)\.(\d+)[. ]?((?:(?<= )(?>RC|Beta |Alpha ))?\d+)?)$~', key($versions))) {
+	if (!preg_match('~^((\d+)\.(\d+)[. ]?((?:(?<= )(?>RC|Beta |Alpha ))?\d+)?)(?:-dev)?$~', key($versions))) {
 		throw new Exception('Error: SMF_VERSION string is invalid: "' . key($versions) . '"');
 	}
 
