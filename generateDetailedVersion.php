@@ -234,7 +234,7 @@ if (isset($cliparams['output']) && $cliparams['output'] == 'raw') {
 		foreach ($files as $file => $version) {
 			++$i;
 
-			$thislocation = $location === 'SMF' ? 'SMF' : ($location === 'Languages' ? str_replace('.php', '', $file) : $location . $file);
+			$thislocation = $location === 'SMF' ? 'SMF' : ($location === 'Languages' ? $file : $location . $file);
 
 			if ($thislocation === 'SMF') {
 				$version = 'SMF ' . $version;
